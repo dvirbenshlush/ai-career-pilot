@@ -10,14 +10,21 @@ ${jobDescription}
 Provide a JSON response with this exact structure:
 {
   "score": <number 0-100>,
-  "matching_keywords": [<list of keywords found in both>],
-  "missing_keywords": [<list of important keywords from JD missing in resume>],
-  "strengths": [<3-5 bullet points of strong matches>],
-  "gaps": [<3-5 bullet points of gaps or weaknesses>],
+  "matching_keywords": [
+    { "keyword": "<keyword>", "category": "<Technical|Soft Skills|Tools|Domain|Language|Other>" }
+  ],
+  "missing_keywords": [
+    { "keyword": "<keyword>", "category": "<Technical|Soft Skills|Tools|Domain|Language|Other>" }
+  ],
+  "strengths": [<3-5 bullet point strings of strong matches>],
+  "gaps": [<3-5 bullet point strings of gaps or weaknesses>],
   "tailored_suggestions": "<detailed paragraph on how to tailor the resume for this role>"
 }
 
-Be precise, specific, and actionable. Focus on technical skills, tools, and measurable achievements.
+Rules:
+- Every item in matching_keywords and missing_keywords MUST be an object with "keyword" and "category" fields
+- Strengths and gaps MUST be arrays of plain strings
+- Be precise, specific, and actionable
 `
 
 export const INTERVIEW_COACH_PROMPT = (company: string, role: string, context: string) => `
