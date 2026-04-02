@@ -1,5 +1,16 @@
 export const RESUME_MATCH_PROMPT = (resumeText: string, jobDescription: string) => `
-You are an expert technical recruiter and career coach. Analyze the following resume against the job description.
+You are a senior technical recruiter with 15 years of experience matching candidates to roles.
+
+TASK: Analyze how well this resume matches the job description. Be precise and strict — only mark a keyword as matching if it genuinely appears in the resume with real experience, not just a passing mention.
+
+STEP 1 — Extract requirements from the JD:
+Read the job description carefully and extract: required technologies, tools, frameworks, programming languages, methodologies, domain knowledge, soft skills, years of experience, certifications.
+
+STEP 2 — Check each requirement against the resume:
+For each extracted requirement, determine: does the candidate have real experience with this? (matching) or is it missing? (missing)
+
+STEP 3 — Score honestly:
+Score = (matched requirements / total requirements) * 100. Round to nearest integer.
 
 RESUME:
 ${resumeText}
@@ -7,24 +18,31 @@ ${resumeText}
 JOB DESCRIPTION:
 ${jobDescription}
 
-Provide a JSON response with this exact structure:
+Return JSON:
 {
-  "score": <number 0-100>,
+  "score": <integer 0-100, honest assessment>,
   "matching_keywords": [
-    { "keyword": "<keyword>", "category": "<Technical|Soft Skills|Tools|Domain|Language|Other>" }
+    { "keyword": "<exact term from JD>", "category": "<Technical|Tools|Soft Skills|Domain|Language|Certification>" }
   ],
   "missing_keywords": [
-    { "keyword": "<keyword>", "category": "<Technical|Soft Skills|Tools|Domain|Language|Other>" }
+    { "keyword": "<exact term from JD>", "category": "<Technical|Tools|Soft Skills|Domain|Language|Certification>" }
   ],
-  "strengths": [<3-5 bullet point strings of strong matches>],
-  "gaps": [<3-5 bullet point strings of gaps or weaknesses>],
-  "tailored_suggestions": "<detailed paragraph on how to tailor the resume for this role>"
+  "strengths": [
+    "<specific strength with evidence from resume — e.g. '3 years React experience matching the frontend requirement'>",
+    "<another specific strength>"
+  ],
+  "gaps": [
+    "<specific gap — e.g. 'No mention of Kubernetes, which is listed as required'>",
+    "<another specific gap>"
+  ],
+  "tailored_suggestions": "<3-5 concrete, actionable sentences on exactly what to add/change in the resume to better match this specific job>"
 }
 
 Rules:
-- Every item in matching_keywords and missing_keywords MUST be an object with "keyword" and "category" fields
-- Strengths and gaps MUST be arrays of plain strings
-- Be precise, specific, and actionable
+- matching_keywords and missing_keywords: objects only, never plain strings
+- strengths and gaps: plain strings only, never objects
+- Be specific — generic statements like 'good communication' are not useful
+- Only include keywords that are explicitly required or strongly preferred in the JD
 `
 
 export const INTERVIEW_COACH_PROMPT = (company: string, role: string, context: string) => `
