@@ -8,12 +8,21 @@ export default async function JobsPage() {
 
   if (!user) redirect('/login')
 
-  const { data: savedJobs } = await supabase
-    .from('job_opportunities')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('found_at', { ascending: false })
-    .limit(50)
+  const [{ data: savedJobs }, { data: latestResume }] = await Promise.all([
+    supabase
+      .from('job_opportunities')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('found_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('resumes')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single(),
+  ])
 
   return (
     <div className="container max-w-5xl mx-auto py-8 px-4">
@@ -21,7 +30,7 @@ export default async function JobsPage() {
         <h1 className="text-3xl font-bold">Job Hunter</h1>
         <p className="text-muted-foreground mt-1">AI agent that searches and scores jobs matching your profile</p>
       </div>
-      <JobsPageClient savedJobs={savedJobs || []} />
+      <JobsPageClient savedJobs={savedJobs || []} resumeId={latestResume?.id ?? null} />
     </div>
   )
 }

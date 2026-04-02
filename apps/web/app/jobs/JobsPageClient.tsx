@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Sparkles } from 'lucide-react'
+import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Sparkles, FileText } from 'lucide-react'
 
 function LinkedInIcon({ className }: { className?: string }) {
   return (
@@ -44,7 +44,48 @@ function ScoreBadge({ score }: { score: number }) {
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color}`}>{score}% match</span>
 }
 
-function JobCard({ job }: { job: Job }) {
+function JobCard({ job, resumeId }: { job: Job; resumeId: string | null }) {
+  const [cvLoading, setCvLoading] = useState(false)
+  const [cvHtml, setCvHtml] = useState<string | null>(null)
+  const [cvError, setCvError] = useState<string | null>(null)
+
+  const handleCreateCV = async () => {
+    if (!resumeId) return
+    setCvLoading(true)
+    setCvError(null)
+    try {
+      const jobDescription = [job.title, job.company, job.snippet, job.why_match].filter(Boolean).join('\n')
+      const res = await fetch('/api/resume/generate-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resumeId,
+          jobTitle: job.title,
+          company: job.company,
+          jobDescription,
+          language: 'en',
+        }),
+      })
+      let data: { html?: string; error?: string }
+      try { data = await res.json() } catch { data = { error: 'Unexpected server error' } }
+      if (!res.ok) throw new Error(data.error ?? 'CV generation failed')
+      setCvHtml(data.html ?? null)
+    } catch (err) {
+      setCvError(err instanceof Error ? err.message : 'CV generation failed')
+    } finally {
+      setCvLoading(false)
+    }
+  }
+
+  const handleOpenCV = () => {
+    if (!cvHtml) return
+    const win = window.open('', '_blank')
+    if (win) {
+      win.document.write(cvHtml)
+      win.document.close()
+    }
+  }
+
   return (
     <Card className="hover:shadow-sm transition-shadow">
       <CardContent className="pt-4 pb-4">
@@ -75,10 +116,51 @@ function JobCard({ job }: { job: Job }) {
                 {job.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
               </div>
             )}
+            {cvError && <p className="text-xs text-destructive mt-2">{cvError}</p>}
           </div>
-          <a href={job.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-            <Button variant="outline" size="sm"><ExternalLink className="h-3.5 w-3.5 mr-1" /> Apply</Button>
-          </a>
+
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {cvHtml ? (
+              <>
+                <Button
+                  size="sm"
+                  className="whitespace-nowrap"
+                  onClick={() => {
+                    handleOpenCV()
+                    window.open(job.url, '_blank', 'noopener,noreferrer')
+                  }}
+                >
+                  <FileText className="h-3.5 w-3.5 mr-1" /> Apply with Adapted CV
+                </Button>
+                <button
+                  onClick={handleOpenCV}
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  View adapted CV
+                </button>
+              </>
+            ) : (
+              <>
+                <a href={job.url} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm"><ExternalLink className="h-3.5 w-3.5 mr-1" /> Apply</Button>
+                </a>
+                {resumeId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={cvLoading}
+                    onClick={handleCreateCV}
+                    className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
+                  >
+                    {cvLoading
+                      ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Creating CV...</>
+                      : <><FileText className="h-3 w-3 mr-1" /> Create adapted CV</>
+                    }
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -132,7 +214,7 @@ function FilterRow({
   )
 }
 
-export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
+export function JobsPageClient({ savedJobs, resumeId }: { savedJobs: Job[]; resumeId: string | null }) {
   // Manual search state
   const [role, setRole] = useState('')
   const [skills, setSkills] = useState('')
@@ -290,7 +372,7 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
               <h2 className="text-lg font-semibold">{liResults.length} LinkedIn Jobs Matched to Your Profile</h2>
               {liResults.length === 0
                 ? <p className="text-muted-foreground text-sm">No matches found. Try adjusting your filters.</p>
-                : liResults.map((job, i) => <JobCard key={i} job={job} />)
+                : liResults.map((job, i) => <JobCard key={i} job={job} resumeId={resumeId} />)
               }
             </div>
           )}
@@ -345,7 +427,7 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
               <h2 className="text-lg font-semibold">{searchResults.length} jobs found</h2>
               {searchResults.length === 0
                 ? <p className="text-muted-foreground text-sm">No jobs found. Try broadening your search parameters.</p>
-                : searchResults.map((job, i) => <JobCard key={i} job={job} />)
+                : searchResults.map((job, i) => <JobCard key={i} job={job} resumeId={resumeId} />)
               }
             </div>
           )}
@@ -353,7 +435,7 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
           {searchResults === null && savedJobs.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-lg font-semibold">{savedJobs.length} saved jobs</h2>
-              {savedJobs.map((job, i) => <JobCard key={i} job={job} />)}
+              {savedJobs.map((job, i) => <JobCard key={i} job={job} resumeId={resumeId} />)}
             </div>
           )}
 
