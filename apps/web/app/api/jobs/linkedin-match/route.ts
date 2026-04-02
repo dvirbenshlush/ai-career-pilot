@@ -175,9 +175,22 @@ Return JSON:
         },
       ],
       max_tokens: 2000,
-      response_format: { type: 'json_object' },
+      // No response_format here — Groq rejects the whole response on any malformed entry.
+      // We extract and repair JSON manually instead.
     })
-    const parsed = JSON.parse(result.choices[0]?.message?.content ?? '{}')
+    const raw = result.choices[0]?.message?.content ?? ''
+    // Extract the JSON object/array from the response (strips markdown fences if present)
+    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('No JSON found in response')
+    // Repair: fix unquoted string values that start with a digit (e.g. "title": 59 Foo → "title": "59 Foo")
+    const repaired = jsonMatch[0].replace(/":\s*([^"\[{}\],\n][^,}\]\n]*?)(\s*[,}\]])/g, (_, val, tail) => {
+      const trimmed = val.trim()
+      if (trimmed === 'true' || trimmed === 'false' || trimmed === 'null' || /^-?\d+(\.\d+)?$/.test(trimmed)) {
+        return `": ${trimmed}${tail}`
+      }
+      return `": "${trimmed.replace(/"/g, '\\"')}"${tail}`
+    })
+    const parsed = JSON.parse(repaired)
     jobs = (parsed.jobs || []).slice(0, 10) as JobResult[]
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

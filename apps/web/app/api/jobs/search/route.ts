@@ -96,11 +96,21 @@ Return JSON: { "jobs": [ {...}, ... ] }
 Only include actual job postings. Skip anything that is not a job listing.`,
         },
       ],
-      max_tokens: 3000,
-      response_format: { type: 'json_object' },
+      max_tokens: 2000,
+      // No response_format — Groq rejects on any malformed entry; we repair manually.
     })
 
-    const parsed = JSON.parse(aiResult.choices[0]?.message?.content ?? '{}')
+    const raw = aiResult.choices[0]?.message?.content ?? ''
+    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('No JSON found in response')
+    const repaired = jsonMatch[0].replace(/":\s*([^"\[{}\],\n][^,}\]\n]*?)(\s*[,}\]])/g, (_, val, tail) => {
+      const trimmed = val.trim()
+      if (trimmed === 'true' || trimmed === 'false' || trimmed === 'null' || /^-?\d+(\.\d+)?$/.test(trimmed)) {
+        return `": ${trimmed}${tail}`
+      }
+      return `": "${trimmed.replace(/"/g, '\\"')}"${tail}`
+    })
+    const parsed = JSON.parse(repaired)
     scoredJobs = (parsed.jobs || []) as ScoredJob[]
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
