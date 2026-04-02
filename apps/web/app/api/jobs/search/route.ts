@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   const locationClause = location ? `in ${location}` : ''
   const salaryClause = salaryMin ? `salary ${salaryMin}+` : ''
   const skillsClause = skills ? skills : ''
-  const query = `${role} developer job ${skillsClause} ${remoteClause} ${locationClause} ${salaryClause} site:linkedin.com OR site:glassdoor.com OR site:indeed.com OR site:jobs.lever.co OR site:greenhouse.io`
+  const query = `${role} job opening ${skillsClause} ${remoteClause} ${locationClause} ${salaryClause} site:linkedin.com OR site:glassdoor.com OR site:indeed.com OR site:jobs.lever.co OR site:greenhouse.io`
     .replace(/\s+/g, ' ').trim()
 
   // Search with Tavily
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
           role: 'user',
           content: `You are a job search assistant. Extract structured job data from these search results and score each one based on how well it matches the target role.
 
-TARGET: ${role} developer${skills ? `, skills: ${skills}` : ''}${location ? `, location: ${location}` : ''}${remote ? ', remote preferred' : ''}${salaryMin ? `, min salary: ${salaryMin}` : ''}
+TARGET: ${role}${skills ? `, skills/experience: ${skills}` : ''}${location ? `, location: ${location}` : ''}${remote ? ', remote preferred' : ''}${salaryMin ? `, min salary: ${salaryMin}` : ''}
 
 SEARCH RESULTS:
 ${snippets}
