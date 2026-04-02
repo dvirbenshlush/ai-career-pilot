@@ -115,8 +115,12 @@ export function MatchAnalysis({ resumeId }: MatchAnalysisProps) {
         }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error)
+        let msg = `Server error (${res.status})`
+        try {
+          const data = await res.json()
+          msg = data.error || msg
+        } catch { /* body was not JSON */ }
+        throw new Error(msg)
       }
       const html = await res.text()
       const win = window.open('', '_blank')

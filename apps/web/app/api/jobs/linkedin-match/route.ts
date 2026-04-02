@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import FirecrawlApp from '@mendable/firecrawl-js'
 import { tavily } from '@tavily/core'
 import Groq from 'groq-sdk'
 
@@ -42,30 +41,18 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const {
-    linkedinUrl,
+    profileText,
     salary,
-    jobType,      // 'any' | 'administrative' | 'physical' | 'technical' | 'creative' | 'sales' | 'management' | 'medical'
-    workMode,     // 'any' | 'remote' | 'hybrid' | 'onsite'
+    jobType,
+    workMode,
     location,
-    experienceLevel, // 'any' | 'entry' | 'mid' | 'senior'
+    experienceLevel,
   } = await request.json()
 
-  if (!linkedinUrl) return NextResponse.json({ error: 'LinkedIn profile URL is required' }, { status: 400 })
-  if (!process.env.FIRECRAWL_API_KEY) return NextResponse.json({ error: 'FIRECRAWL_API_KEY not configured' }, { status: 500 })
-  if (!process.env.TAVILY_API_KEY) return NextResponse.json({ error: 'TAVILY_API_KEY not configured' }, { status: 500 })
-
-  // Step 1: Scrape LinkedIn profile with Firecrawl
-  let profileText = ''
-  try {
-    const fc = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY })
-    const result = await fc.scrapeUrl(linkedinUrl, { formats: ['markdown'] })
-    if (!result.success) throw new Error('Profile scrape returned no data')
-    profileText = (result as { markdown?: string }).markdown ?? ''
-    if (!profileText || profileText.length < 100) throw new Error('Profile appears empty or private')
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: 'Could not scrape LinkedIn profile: ' + msg }, { status: 400 })
+  if (!profileText || profileText.trim().length < 50) {
+    return NextResponse.json({ error: 'Profile text is required' }, { status: 400 })
   }
+  if (!process.env.TAVILY_API_KEY) return NextResponse.json({ error: 'TAVILY_API_KEY not configured' }, { status: 500 })
 
   // Step 2: Extract structured profile summary with Groq
   let profile: ProfileSummary

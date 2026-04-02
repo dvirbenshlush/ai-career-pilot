@@ -7,7 +7,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Linkedin, Sparkles } from 'lucide-react'
+import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Sparkles } from 'lucide-react'
+
+function LinkedInIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+    </svg>
+  )
+}
 
 interface Job {
   id?: string
@@ -136,7 +144,7 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
   const [searchResults, setSearchResults] = useState<Job[] | null>(null)
 
   // LinkedIn match state
-  const [linkedinUrl, setLinkedinUrl] = useState('')
+  const [profileText, setProfileText] = useState('')
   const [salary, setSalary] = useState('')
   const [jobType, setJobType] = useState('any')
   const [workMode, setWorkMode] = useState('any')
@@ -178,7 +186,7 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
       const res = await fetch('/api/jobs/linkedin-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ linkedinUrl, salary, jobType, workMode, location: liLocation, experienceLevel: expLevel }),
+        body: JSON.stringify({ profileText, salary, jobType, workMode, location: liLocation, experienceLevel: expLevel }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -196,7 +204,7 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
       <Tabs defaultValue="linkedin">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="linkedin" className="flex items-center gap-2">
-            <Linkedin className="h-4 w-4" /> LinkedIn Profile Match
+            <LinkedInIcon className="h-4 w-4" /> LinkedIn Profile Match
           </TabsTrigger>
           <TabsTrigger value="manual" className="flex items-center gap-2">
             <Search className="h-4 w-4" /> Manual Search
@@ -208,7 +216,7 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Linkedin className="h-5 w-5 text-blue-600" />
+                <LinkedInIcon className="h-5 w-5 text-blue-600" />
                 Match Jobs to Your LinkedIn Profile
               </CardTitle>
               <CardDescription>
@@ -218,15 +226,17 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
             <CardContent>
               <form onSubmit={handleLinkedinMatch} className="space-y-5">
                 <div className="space-y-2">
-                  <Label>LinkedIn Profile URL *</Label>
-                  <Input
-                    placeholder="https://www.linkedin.com/in/your-profile"
-                    value={linkedinUrl}
-                    onChange={e => setLinkedinUrl(e.target.value)}
+                  <Label>Paste Your LinkedIn Profile Text *</Label>
+                  <textarea
+                    className="w-full min-h-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                    placeholder="1. Open your LinkedIn profile in a browser&#10;2. Select all text (Ctrl+A) and copy (Ctrl+C)&#10;3. Paste it here (Ctrl+V)"
+                    value={profileText}
+                    onChange={e => setProfileText(e.target.value)}
                     required
-                    type="url"
                   />
-                  <p className="text-xs text-muted-foreground">Make sure your profile is set to public</p>
+                  <p className="text-xs text-muted-foreground">
+                    LinkedIn blocks automated access — paste your profile text manually. Go to your profile → select all → copy → paste here.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -261,7 +271,7 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
             <Card className="border-indigo-200 bg-indigo-50/40">
               <CardContent className="pt-4 pb-4">
                 <div className="flex items-start gap-3">
-                  <Linkedin className="h-8 w-8 text-blue-600 shrink-0 mt-0.5" />
+                  <LinkedInIcon className="h-8 w-8 text-blue-600 shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold">{profile.name}</p>
                     <p className="text-sm text-muted-foreground">{profile.current_title} · {profile.experience_years} years exp.</p>

@@ -265,6 +265,16 @@ function buildHTML(cv: Record<string, unknown>, language: string, jobTitle: stri
 }
 
 export async function POST(request: NextRequest) {
+  try {
+    return await handlePost(request)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[generate-cv] unhandled error:', msg)
+    return NextResponse.json({ error: 'Unexpected error: ' + msg }, { status: 500 })
+  }
+}
+
+async function handlePost(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

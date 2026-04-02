@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import Groq from 'groq-sdk'
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+import mammoth from 'mammoth'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -43,31 +41,32 @@ export async function POST(request: NextRequest) {
 
   const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(fileName)
 
-  // Extract text — Groq doesn't support PDF natively, so we convert to base64 text prompt for DOCX
-  // For PDF we extract raw text via a text prompt workaround
   let parsedText = ''
 
   try {
-    if (file.type === 'application/pdf') {
-      // Groq doesn't support binary PDF — use llama with text extraction hint
-      const base64 = buffer.toString('base64')
-      const result = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          {
-            role: 'user',
-            content: `The following is a base64-encoded PDF resume. Extract and return only the plain text content, preserving the structure as much as possible.\n\nBase64: ${base64.slice(0, 8000)}`,
-          },
-        ],
-        max_tokens: 2048,
-      })
-      parsedText = result.choices[0]?.message?.content ?? ''
+    if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      // DOCX: extract text with mammoth
+      const result = await mammoth.extractRawText({ buffer })
+      parsedText = result.value.trim()
     } else {
-      parsedText = 'DOCX parsing: text extraction from binary DOCX is not supported without a parsing library. Please upload a PDF for best results.'
+      // PDF: extract text using pdf-parse if available, otherwise use base64 hint
+      // Dynamically import to avoid build issues
+      try {
+        const pdfParse = (await import('pdf-parse')).default
+        const result = await pdfParse(buffer)
+        parsedText = result.text.trim()
+      } catch {
+        // pdf-parse not installed — fall back to raw buffer text extraction
+        parsedText = buffer.toString('utf-8').replace(/[^\x20-\x7E\u0590-\u05FF\n\r\t ]/g, ' ').replace(/\s+/g, ' ').trim()
+      }
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: 'AI parse error: ' + msg }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to parse file: ' + msg }, { status: 500 })
+  }
+
+  if (!parsedText.trim()) {
+    return NextResponse.json({ error: 'Could not extract text from this file. Try saving as a different format.' }, { status: 400 })
   }
 
   // Save to DB
