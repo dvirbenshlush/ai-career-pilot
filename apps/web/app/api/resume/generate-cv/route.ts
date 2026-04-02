@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import Groq from 'groq-sdk'
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+import { groqChat } from '@/lib/ai/groq'
 
 // Step 1: Extract everything from the raw resume text into clean structured JSON
 const EXTRACT_RESUME_PROMPT = (resumeText: string) => `
@@ -314,8 +312,7 @@ async function handlePost(request: NextRequest) {
   // Step 1: Extract structured data from raw resume text
   let structuredCV: string
   try {
-    const extractResult = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const extractResult = await groqChat({
       messages: [
         { role: 'system', content: jsonSystem },
         { role: 'user', content: EXTRACT_RESUME_PROMPT(safeResumeText) },
@@ -333,8 +330,7 @@ async function handlePost(request: NextRequest) {
   // Step 2: Tailor the structured CV to the job
   let cvData: Record<string, unknown>
   try {
-    const tailorResult = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const tailorResult = await groqChat({
       messages: [
         { role: 'system', content: jsonSystem },
         { role: 'user', content: TAILOR_CV_PROMPT(structuredCV, jobTitle, company, jobDescription, language) },

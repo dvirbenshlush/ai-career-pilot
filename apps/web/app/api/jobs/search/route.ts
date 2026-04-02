@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { tavily } from '@tavily/core'
-import Groq from 'groq-sdk'
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+import { groqChat } from '@/lib/ai/groq'
 
 interface TavilyResult {
   title: string
@@ -68,8 +66,7 @@ export async function POST(request: NextRequest) {
 
   let scoredJobs: ScoredJob[] = []
   try {
-    const aiResult = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const aiResult = await groqChat({
       messages: [
         {
           role: 'system',

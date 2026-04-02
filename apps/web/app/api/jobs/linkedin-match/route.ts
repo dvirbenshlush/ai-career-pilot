@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { tavily } from '@tavily/core'
-import Groq from 'groq-sdk'
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+import { groqChat } from '@/lib/ai/groq'
 
 interface TavilyResult {
   title: string
@@ -57,8 +55,7 @@ export async function POST(request: NextRequest) {
   // Step 2: Extract structured profile summary with Groq
   let profile: ProfileSummary
   try {
-    const result = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const result = await groqChat({
       messages: [
         { role: 'system', content: 'You are a JSON API. Respond with valid JSON only — no markdown, no explanation.' },
         {
@@ -133,8 +130,7 @@ Return JSON:
 
   let jobs: JobResult[] = []
   try {
-    const result = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const result = await groqChat({
       messages: [
         { role: 'system', content: 'You are a JSON API. Respond with valid JSON only — no markdown, no explanation.' },
         {

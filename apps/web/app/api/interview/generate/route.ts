@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import Groq from 'groq-sdk'
+import { groqChat } from '@/lib/ai/groq'
 import { INTERVIEW_COACH_PROMPT } from '@/lib/ai/prompts'
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -35,8 +33,7 @@ export async function POST(request: NextRequest) {
   let responseText = ''
   try {
     const context = jobDescription || `${role} position at ${company}`
-    const result = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const result = await groqChat({
       messages: [
         {
           role: 'system',
