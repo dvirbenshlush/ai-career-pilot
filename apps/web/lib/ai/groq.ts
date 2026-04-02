@@ -2,9 +2,11 @@ import Groq from 'groq-sdk'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-// Model fallback chain: prefer capable model, fall back to fast model on rate limit
+// Model fallback chain ordered by capability.
+// llama-3.1-8b-instant has a hard 6K TPM request limit — gemma2-9b-it (15K TPM) handles larger payloads.
 const MODEL_CHAIN = [
   'llama-3.3-70b-versatile',
+  'gemma2-9b-it',
   'llama-3.1-8b-instant',
 ]
 
@@ -17,8 +19,8 @@ export async function groqChat(params: ChatParams): Promise<Groq.Chat.ChatComple
       return await groq.chat.completions.create({ ...params, model })
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
-      // Only fall back on rate limit errors
-      if (msg.includes('rate_limit_exceeded') || msg.includes('429')) {
+      // Fall back on rate limit (429) or request-too-large (413) errors
+      if (msg.includes('rate_limit_exceeded') || msg.includes('429') || msg.includes('413') || msg.includes('Request too large')) {
         lastError = e
         continue
       }

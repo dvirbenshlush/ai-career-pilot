@@ -66,10 +66,13 @@ function JobCard({ job, resumeId }: { job: Job; resumeId: string | null }) {
           language: 'en',
         }),
       })
-      let data: { html?: string; error?: string }
-      try { data = await res.json() } catch { data = { error: 'Unexpected server error' } }
-      if (!res.ok) throw new Error(data.error ?? 'CV generation failed')
-      setCvHtml(data.html ?? null)
+      if (!res.ok) {
+        let errMsg = 'CV generation failed'
+        try { const d = await res.json(); errMsg = d.error ?? errMsg } catch { /* empty */ }
+        throw new Error(errMsg)
+      }
+      const html = await res.text()
+      setCvHtml(html)
     } catch (err) {
       setCvError(err instanceof Error ? err.message : 'CV generation failed')
     } finally {
@@ -79,11 +82,9 @@ function JobCard({ job, resumeId }: { job: Job; resumeId: string | null }) {
 
   const handleOpenCV = () => {
     if (!cvHtml) return
-    const win = window.open('', '_blank')
-    if (win) {
-      win.document.write(cvHtml)
-      win.document.close()
-    }
+    const blob = new Blob([cvHtml], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
   }
 
   return (
@@ -122,22 +123,17 @@ function JobCard({ job, resumeId }: { job: Job; resumeId: string | null }) {
           <div className="flex flex-col items-end gap-2 shrink-0">
             {cvHtml ? (
               <>
-                <Button
-                  size="sm"
-                  className="whitespace-nowrap"
-                  onClick={() => {
-                    handleOpenCV()
-                    window.open(job.url, '_blank', 'noopener,noreferrer')
-                  }}
-                >
-                  <FileText className="h-3.5 w-3.5 mr-1" /> Apply with Adapted CV
+                <Button size="sm" className="whitespace-nowrap" onClick={handleOpenCV}>
+                  <FileText className="h-3.5 w-3.5 mr-1" /> View Adapted CV
                 </Button>
-                <button
-                  onClick={handleOpenCV}
+                <a
+                  href={job.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                 >
-                  View adapted CV
-                </button>
+                  Apply to job posting →
+                </a>
               </>
             ) : (
               <>

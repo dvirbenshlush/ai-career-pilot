@@ -303,9 +303,12 @@ async function handlePost(request: NextRequest) {
     return NextResponse.json({ error: 'Resume has no parsed text. Please upload a PDF for best results.' }, { status: 400 })
   }
 
+  // Truncate to ~3 000 chars to stay within model token-per-minute limits on fallback models
+  const truncatedResumeText = resumeText.slice(0, 3000)
+
   // Replace Hebrew gershayim written as ASCII " so the model doesn't break JSON
   // e.g. בע"מ → בע״מ, סמנכ"ל → סמנכ״ל
-  const safeResumeText = resumeText.replace(/(\w)"(\w)/g, '$1״$2')
+  const safeResumeText = truncatedResumeText.replace(/(\w)"(\w)/g, '$1״$2')
 
   const jsonSystem = 'You are a JSON API. Respond with valid JSON only — no markdown, no code fences. CRITICAL: never use double-quote characters (") inside string values. For Hebrew abbreviations like בע"מ write בע״מ using the Unicode gershayim character ״ (U+05F4) instead.'
 
@@ -335,7 +338,7 @@ async function handlePost(request: NextRequest) {
         { role: 'system', content: jsonSystem },
         { role: 'user', content: TAILOR_CV_PROMPT(structuredCV, jobTitle, company, jobDescription, language) },
       ],
-      max_tokens: 4000,
+      max_tokens: 2500,
       response_format: { type: 'json_object' },
     })
     const raw = tailorResult.choices[0]?.message?.content ?? '{}'
