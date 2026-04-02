@@ -286,7 +286,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Resume not found' }, { status: 404 })
   }
 
-  const jsonSystem = 'You are a JSON API. Respond with valid JSON only — no markdown, no code fences, no explanation. Arrays must contain only quoted strings or objects, never unquoted text.'
+  // Strip DOCX placeholder if present
+  const resumeText = resume.parsed_text.startsWith('DOCX parsing')
+    ? ''
+    : resume.parsed_text
+
+  if (!resumeText.trim()) {
+    return NextResponse.json({ error: 'Resume has no parsed text. Please upload a PDF for best results.' }, { status: 400 })
+  }
+
+  // Replace Hebrew gershayim written as ASCII " so the model doesn't break JSON
+  // e.g. בע"מ → בע״מ, סמנכ"ל → סמנכ״ל
+  const safeResumeText = resumeText.replace(/(\w)"(\w)/g, '$1״$2')
+
+  const jsonSystem = 'You are a JSON API. Respond with valid JSON only — no markdown, no code fences. CRITICAL: never use double-quote characters (") inside string values. For Hebrew abbreviations like בע"מ write בע״מ using the Unicode gershayim character ״ (U+05F4) instead.'
 
   // Step 1: Extract structured data from raw resume text
   let structuredCV: string
@@ -295,13 +308,12 @@ export async function POST(request: NextRequest) {
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: jsonSystem },
-        { role: 'user', content: EXTRACT_RESUME_PROMPT(resume.parsed_text) },
+        { role: 'user', content: EXTRACT_RESUME_PROMPT(safeResumeText) },
       ],
       max_tokens: 3000,
       response_format: { type: 'json_object' },
     })
     structuredCV = extractResult.choices[0]?.message?.content ?? '{}'
-    // Validate it parsed
     JSON.parse(structuredCV)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -320,7 +332,13 @@ export async function POST(request: NextRequest) {
       max_tokens: 4000,
       response_format: { type: 'json_object' },
     })
-    cvData = JSON.parse(tailorResult.choices[0]?.message?.content ?? '{}')
+    const raw = tailorResult.choices[0]?.message?.content ?? '{}'
+    // Repair: replace any unescaped " inside string values that slipped through
+    const repaired = raw.replace(/:\s*"((?:[^"\\]|\\.)*)"/g, (_m, inner: string) => {
+      const fixed = inner.replace(/(?<!\\)"/g, '״')
+      return `: "${fixed}"`
+    })
+    cvData = JSON.parse(repaired)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'CV tailoring failed: ' + msg }, { status: 500 })
