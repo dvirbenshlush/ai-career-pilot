@@ -76,11 +76,11 @@ export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Role *</Label>
-                <Input placeholder="e.g. Frontend Engineer" value={role} onChange={e => setRole(e.target.value)} required />
+                <Input placeholder="e.g. Product Manager, Accountant, Nurse" value={role} onChange={e => setRole(e.target.value)} required />
               </div>
               <div className="space-y-2">
                 <Label>Skills / Stack</Label>
-                <Input placeholder="e.g. React, TypeScript, Node.js" value={skills} onChange={e => setSkills(e.target.value)} />
+                <Input placeholder="e.g. Excel, Python, Sales, Management" value={skills} onChange={e => setSkills(e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
