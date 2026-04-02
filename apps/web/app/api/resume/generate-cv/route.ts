@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { groqChat } from '@/lib/ai/groq'
+import { jsonrepair } from 'jsonrepair'
 
 // Step 1: Extract everything from the raw resume text into clean structured JSON
 const EXTRACT_RESUME_PROMPT = (resumeText: string) => `
@@ -321,9 +322,8 @@ async function handlePost(request: NextRequest) {
         { role: 'user', content: EXTRACT_RESUME_PROMPT(safeResumeText) },
       ],
       max_tokens: 3000,
-      response_format: { type: 'json_object' },
     })
-    structuredCV = extractResult.choices[0]?.message?.content ?? '{}'
+    structuredCV = jsonrepair(extractResult.choices[0]?.message?.content ?? '{}')
     JSON.parse(structuredCV)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -339,15 +339,8 @@ async function handlePost(request: NextRequest) {
         { role: 'user', content: TAILOR_CV_PROMPT(structuredCV, jobTitle, company, jobDescription, language) },
       ],
       max_tokens: 2500,
-      response_format: { type: 'json_object' },
     })
-    const raw = tailorResult.choices[0]?.message?.content ?? '{}'
-    // Repair: replace any unescaped " inside string values that slipped through
-    const repaired = raw.replace(/:\s*"((?:[^"\\]|\\.)*)"/g, (_m, inner: string) => {
-      const fixed = inner.replace(/(?<!\\)"/g, '״')
-      return `: "${fixed}"`
-    })
-    cvData = JSON.parse(repaired)
+    cvData = JSON.parse(jsonrepair(tailorResult.choices[0]?.message?.content ?? '{}'))
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'CV tailoring failed: ' + msg }, { status: 500 })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { groqChat } from '@/lib/ai/groq'
 import { RESUME_MATCH_PROMPT } from '@/lib/ai/prompts'
+import { jsonrepair } from 'jsonrepair'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -56,9 +57,8 @@ export async function POST(request: NextRequest) {
         { role: 'user', content: RESUME_MATCH_PROMPT(resume.parsed_text, jobDescription) },
       ],
       max_tokens: 2048,
-      response_format: { type: 'json_object' },
     })
-    responseText = result.choices[0]?.message?.content ?? ''
+    responseText = jsonrepair(result.choices[0]?.message?.content ?? '{}')
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'Groq API error: ' + msg }, { status: 500 })
