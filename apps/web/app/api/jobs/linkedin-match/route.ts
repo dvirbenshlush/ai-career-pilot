@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
           role: 'user', content: `Extract a structured professional summary from this LinkedIn profile.
 
 PROFILE:
-${profileText.slice(0, 6000)}
+${profileText.slice(0, 3000)}
 
 Return JSON:
 {
@@ -124,8 +124,10 @@ Return JSON:
   }
 
   // Step 5: Score and rank with Groq — pick top 10
+  // Keep snippets short so the full request stays under llama-3.1-8b-instant's 6K TPM hard cap
   const snippets = searchResults
-    .map((r, i) => `[${i}] URL: ${r.url}\nTitle: ${r.title}\nSnippet: ${r.content?.slice(0, 350)}`)
+    .slice(0, 15)
+    .map((r, i) => `[${i}] URL: ${r.url}\nTitle: ${r.title}\nSnippet: ${r.content?.slice(0, 200)}`)
     .join('\n\n')
 
   let jobs: JobResult[] = []
@@ -172,7 +174,7 @@ Return JSON:
 }`
         },
       ],
-      max_tokens: 3000,
+      max_tokens: 2000,
       response_format: { type: 'json_object' },
     })
     const parsed = JSON.parse(result.choices[0]?.message?.content ?? '{}')
