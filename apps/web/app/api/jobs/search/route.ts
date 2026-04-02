@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { tavily } from '@tavily/core'
 import { groqChat } from '@/lib/ai/groq'
+import { jsonrepair } from 'jsonrepair'
 
 interface TavilyResult {
   title: string
@@ -101,16 +102,7 @@ Only include actual job postings. Skip anything that is not a job listing.`,
     })
 
     const raw = aiResult.choices[0]?.message?.content ?? ''
-    const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('No JSON found in response')
-    const repaired = jsonMatch[0].replace(/":\s*([^"\[{}\],\n][^,}\]\n]*?)(\s*[,}\]])/g, (_, val, tail) => {
-      const trimmed = val.trim()
-      if (trimmed === 'true' || trimmed === 'false' || trimmed === 'null' || /^-?\d+(\.\d+)?$/.test(trimmed)) {
-        return `": ${trimmed}${tail}`
-      }
-      return `": "${trimmed.replace(/"/g, '\\"')}"${tail}`
-    })
-    const parsed = JSON.parse(repaired)
+    const parsed = JSON.parse(jsonrepair(raw))
     scoredJobs = (parsed.jobs || []) as ScoredJob[]
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
