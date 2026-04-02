@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Linkedin, Sparkles } from 'lucide-react'
 
 interface Job {
   id?: string
@@ -19,6 +20,15 @@ interface Job {
   match_score: number
   tags: string[]
   snippet?: string
+  why_match?: string
+}
+
+interface Profile {
+  name: string
+  current_title: string
+  skills: string[]
+  experience_years: number
+  summary: string
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -26,164 +36,325 @@ function ScoreBadge({ score }: { score: number }) {
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color}`}>{score}% match</span>
 }
 
+function JobCard({ job }: { job: Job }) {
+  return (
+    <Card className="hover:shadow-sm transition-shadow">
+      <CardContent className="pt-4 pb-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="font-semibold text-sm">{job.title}</h3>
+              <ScoreBadge score={Math.round(job.match_score)} />
+              {job.remote && (
+                <span className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                  <Wifi className="h-3 w-3" /> Remote
+                </span>
+              )}
+            </div>
+            <p className="text-sm font-medium text-muted-foreground">{job.company}</p>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+              {job.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>}
+              {job.salary_range && <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{job.salary_range}</span>}
+            </div>
+            {job.why_match && (
+              <p className="text-xs text-indigo-600 mt-1.5 flex items-start gap-1">
+                <Sparkles className="h-3 w-3 mt-0.5 shrink-0" />{job.why_match}
+              </p>
+            )}
+            {job.snippet && !job.why_match && <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{job.snippet}</p>}
+            {job.tags?.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {job.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
+              </div>
+            )}
+          </div>
+          <a href={job.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+            <Button variant="outline" size="sm"><ExternalLink className="h-3.5 w-3.5 mr-1" /> Apply</Button>
+          </a>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const JOB_TYPES = [
+  { value: 'any', label: 'Any' },
+  { value: 'administrative', label: 'Administrative' },
+  { value: 'technical', label: 'Technical' },
+  { value: 'management', label: 'Management' },
+  { value: 'sales', label: 'Sales' },
+  { value: 'creative', label: 'Creative' },
+  { value: 'physical', label: 'Physical / Field' },
+  { value: 'medical', label: 'Medical' },
+]
+
+const WORK_MODES = [
+  { value: 'any', label: 'Any' },
+  { value: 'remote', label: 'Remote' },
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'onsite', label: 'On-site' },
+]
+
+const EXP_LEVELS = [
+  { value: 'any', label: 'Any level' },
+  { value: 'entry', label: 'Entry level' },
+  { value: 'mid', label: 'Mid level' },
+  { value: 'senior', label: 'Senior' },
+]
+
+function FilterRow({
+  label, options, value, onChange,
+}: { label: string; options: { value: string; label: string }[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(o => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${value === o.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'}`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function JobsPageClient({ savedJobs }: { savedJobs: Job[] }) {
+  // Manual search state
   const [role, setRole] = useState('')
   const [skills, setSkills] = useState('')
-  const [location, setLocation] = useState('')
+  const [searchLocation, setSearchLocation] = useState('')
   const [remote, setRemote] = useState(false)
   const [salaryMin, setSalaryMin] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [results, setResults] = useState<Job[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [searchResults, setSearchResults] = useState<Job[] | null>(null)
+
+  // LinkedIn match state
+  const [linkedinUrl, setLinkedinUrl] = useState('')
+  const [salary, setSalary] = useState('')
+  const [jobType, setJobType] = useState('any')
+  const [workMode, setWorkMode] = useState('any')
+  const [liLocation, setLiLocation] = useState('')
+  const [expLevel, setExpLevel] = useState('any')
+  const [liLoading, setLiLoading] = useState(false)
+  const [liError, setLiError] = useState<string | null>(null)
+  const [liResults, setLiResults] = useState<Job[] | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError(null)
-    setResults(null)
-
+    setSearchLoading(true)
+    setSearchError(null)
+    setSearchResults(null)
     try {
       const res = await fetch('/api/jobs/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, skills, location, remote, salaryMin }),
+        body: JSON.stringify({ role, skills, location: searchLocation, remote, salaryMin }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setResults(data.jobs)
+      setSearchResults(data.jobs)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed')
+      setSearchError(err instanceof Error ? err.message : 'Search failed')
     } finally {
-      setLoading(false)
+      setSearchLoading(false)
     }
   }
 
-  const displayJobs = results ?? savedJobs
+  const handleLinkedinMatch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLiLoading(true)
+    setLiError(null)
+    setLiResults(null)
+    setProfile(null)
+    try {
+      const res = await fetch('/api/jobs/linkedin-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linkedinUrl, salary, jobType, workMode, location: liLocation, experienceLevel: expLevel }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setLiResults(data.jobs)
+      setProfile(data.profile)
+    } catch (err) {
+      setLiError(err instanceof Error ? err.message : 'Analysis failed')
+    } finally {
+      setLiLoading(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {/* Search form */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Search Parameters
-          </CardTitle>
-          <CardDescription>Define what you&apos;re looking for and the AI agent will find and score matching jobs</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSearch} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Role *</Label>
-                <Input placeholder="e.g. Product Manager, Accountant, Nurse" value={role} onChange={e => setRole(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label>Skills / Stack</Label>
-                <Input placeholder="e.g. Excel, Python, Sales, Management" value={skills} onChange={e => setSkills(e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Location</Label>
-                <Input placeholder="e.g. Tel Aviv, NYC, or leave empty" value={location} onChange={e => setLocation(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Min Salary</Label>
-                <Input placeholder="e.g. $120,000 or ₪30,000/month" value={salaryMin} onChange={e => setSalaryMin(e.target.value)} />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="remote"
-                checked={remote}
-                onChange={e => setRemote(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="remote" className="cursor-pointer">Remote / Hybrid preferred</Label>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching jobs...</>
-                : <><Search className="mr-2 h-4 w-4" /> Find Jobs</>
-              }
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="linkedin">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="linkedin" className="flex items-center gap-2">
+            <Linkedin className="h-4 w-4" /> LinkedIn Profile Match
+          </TabsTrigger>
+          <TabsTrigger value="manual" className="flex items-center gap-2">
+            <Search className="h-4 w-4" /> Manual Search
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Results */}
-      {results !== null && results.length === 0 && (
-        <div className="text-center py-10 text-muted-foreground">
-          <Search className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p>No jobs found. Try broadening your search parameters.</p>
-        </div>
-      )}
+        {/* LinkedIn tab */}
+        <TabsContent value="linkedin" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Linkedin className="h-5 w-5 text-blue-600" />
+                Match Jobs to Your LinkedIn Profile
+              </CardTitle>
+              <CardDescription>
+                Paste your LinkedIn profile URL — we scrape it, analyze your experience, and find 10 matching jobs from LinkedIn
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLinkedinMatch} className="space-y-5">
+                <div className="space-y-2">
+                  <Label>LinkedIn Profile URL *</Label>
+                  <Input
+                    placeholder="https://www.linkedin.com/in/your-profile"
+                    value={linkedinUrl}
+                    onChange={e => setLinkedinUrl(e.target.value)}
+                    required
+                    type="url"
+                  />
+                  <p className="text-xs text-muted-foreground">Make sure your profile is set to public</p>
+                </div>
 
-      {displayJobs.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
-              {results ? `${results.length} jobs found` : `${savedJobs.length} saved jobs`}
-            </h2>
-            {results && <p className="text-sm text-muted-foreground">Sorted by match score</p>}
-          </div>
-
-          {displayJobs.map((job, i) => (
-            <Card key={job.id ?? i} className="hover:shadow-sm transition-shadow">
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="font-semibold text-sm">{job.title}</h3>
-                      <ScoreBadge score={Math.round(job.match_score)} />
-                      {job.remote && (
-                        <span className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                          <Wifi className="h-3 w-3" /> Remote
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium text-muted-foreground">{job.company}</p>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      {job.location && (
-                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
-                      )}
-                      {job.salary_range && (
-                        <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{job.salary_range}</span>
-                      )}
-                    </div>
-                    {job.snippet && <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{job.snippet}</p>}
-                    {job.tags?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {job.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
-                      </div>
-                    )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Location preference</Label>
+                    <Input placeholder="e.g. Tel Aviv, London, NYC" value={liLocation} onChange={e => setLiLocation(e.target.value)} />
                   </div>
-                  <a
-                    href={job.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0"
-                  >
-                    <Button variant="outline" size="sm">
-                      <ExternalLink className="h-3.5 w-3.5 mr-1" /> Apply
-                    </Button>
-                  </a>
+                  <div className="space-y-2">
+                    <Label>Minimum salary</Label>
+                    <Input placeholder="e.g. $80,000 or ₪25,000/month" value={salary} onChange={e => setSalary(e.target.value)} />
+                  </div>
+                </div>
+
+                <FilterRow label="Job Type" options={JOB_TYPES} value={jobType} onChange={setJobType} />
+                <FilterRow label="Work Mode" options={WORK_MODES} value={workMode} onChange={setWorkMode} />
+                <FilterRow label="Experience Level" options={EXP_LEVELS} value={expLevel} onChange={setExpLevel} />
+
+                {liError && <p className="text-sm text-destructive">{liError}</p>}
+
+                <Button type="submit" disabled={liLoading} className="w-full">
+                  {liLoading
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing profile & searching jobs...</>
+                    : <><Sparkles className="mr-2 h-4 w-4" /> Find My Best Matches</>
+                  }
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Profile summary card */}
+          {profile && (
+            <Card className="border-indigo-200 bg-indigo-50/40">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-start gap-3">
+                  <Linkedin className="h-8 w-8 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">{profile.name}</p>
+                    <p className="text-sm text-muted-foreground">{profile.current_title} · {profile.experience_years} years exp.</p>
+                    <p className="text-sm mt-1">{profile.summary}</p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {profile.skills?.slice(0, 8).map(s => <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>)}
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          )}
 
-      {results === null && savedJobs.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p>Set your search parameters above and click Find Jobs.</p>
-        </div>
-      )}
+          {liResults && (
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold">{liResults.length} LinkedIn Jobs Matched to Your Profile</h2>
+              {liResults.length === 0
+                ? <p className="text-muted-foreground text-sm">No matches found. Try adjusting your filters.</p>
+                : liResults.map((job, i) => <JobCard key={i} job={job} />)
+              }
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Manual search tab */}
+        <TabsContent value="manual" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Search className="h-5 w-5" />Search Parameters</CardTitle>
+              <CardDescription>Define what you&apos;re looking for and the AI agent will find and score matching jobs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSearch} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Role *</Label>
+                    <Input placeholder="e.g. Product Manager, Accountant, Nurse" value={role} onChange={e => setRole(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Skills / Stack</Label>
+                    <Input placeholder="e.g. Excel, Python, Sales, Management" value={skills} onChange={e => setSkills(e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Location</Label>
+                    <Input placeholder="e.g. Tel Aviv, NYC" value={searchLocation} onChange={e => setSearchLocation(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Min Salary</Label>
+                    <Input placeholder="e.g. $120,000 or ₪30,000/month" value={salaryMin} onChange={e => setSalaryMin(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="remote" checked={remote} onChange={e => setRemote(e.target.checked)} className="h-4 w-4 rounded" />
+                  <Label htmlFor="remote" className="cursor-pointer">Remote / Hybrid preferred</Label>
+                </div>
+                {searchError && <p className="text-sm text-destructive">{searchError}</p>}
+                <Button type="submit" disabled={searchLoading} className="w-full">
+                  {searchLoading
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching jobs...</>
+                    : <><Search className="mr-2 h-4 w-4" /> Find Jobs</>
+                  }
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {searchResults !== null && (
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold">{searchResults.length} jobs found</h2>
+              {searchResults.length === 0
+                ? <p className="text-muted-foreground text-sm">No jobs found. Try broadening your search parameters.</p>
+                : searchResults.map((job, i) => <JobCard key={i} job={job} />)
+              }
+            </div>
+          )}
+
+          {searchResults === null && savedJobs.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold">{savedJobs.length} saved jobs</h2>
+              {savedJobs.map((job, i) => <JobCard key={i} job={job} />)}
+            </div>
+          )}
+
+          {searchResults === null && savedJobs.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p>Set your search parameters above and click Find Jobs.</p>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
