@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { MessageSquare, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { MessageSquare, Loader2, ChevronDown, ChevronUp, FileText, CheckCircle } from 'lucide-react'
 
 interface Session {
   id: string
@@ -16,14 +16,45 @@ interface Session {
   job_descriptions: { title: string; company: string } | null
 }
 
-export function InterviewPageClient({ sessions }: { sessions: Session[] }) {
+interface SavedJob {
+  id: string
+  title: string
+  company: string
+  description: string
+}
+
+export function InterviewPageClient({
+  sessions,
+  savedJobs,
+}: {
+  sessions: Session[]
+  savedJobs: SavedJob[]
+}) {
   const [company, setCompany] = useState('')
   const [role, setRole] = useState('')
   const [jobDesc, setJobDesc] = useState('')
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<Session | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const handleSelectJob = (job: SavedJob) => {
+    setSelectedJobId(job.id)
+    setRole(job.title)
+    setCompany(job.company)
+    setJobDesc(job.description)
+    setError(null)
+    // Scroll to form
+    document.getElementById('interview-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const handleClearSelection = () => {
+    setSelectedJobId(null)
+    setRole('')
+    setCompany('')
+    setJobDesc('')
+  }
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,6 +75,7 @@ export function InterviewPageClient({ sessions }: { sessions: Session[] }) {
       setError(data.error || 'Failed to generate questions')
     } else {
       setResult(data.session)
+      setExpandedId(data.session.id)
     }
   }
 
@@ -51,40 +83,106 @@ export function InterviewPageClient({ sessions }: { sessions: Session[] }) {
 
   return (
     <div className="space-y-6">
-      <Card>
+
+      {/* Saved jobs from Resume tab */}
+      {savedJobs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileText className="h-4 w-4 text-blue-600" />
+              Pick from Analyzed Jobs
+            </CardTitle>
+            <CardDescription>Jobs you analyzed in the Resume tab — click one to auto-fill the form</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {savedJobs.map(job => (
+                <button
+                  key={job.id}
+                  onClick={() => handleSelectJob(job)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                    selectedJobId === job.id
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background hover:bg-muted border-border'
+                  }`}
+                >
+                  {selectedJobId === job.id && <CheckCircle className="h-3.5 w-3.5" />}
+                  <span className="font-medium">{job.title}</span>
+                  <span className="opacity-70">@ {job.company}</span>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Generation form */}
+      <Card id="interview-form">
         <CardHeader>
-          <CardTitle>New Interview Prep</CardTitle>
-          <CardDescription>Enter the company and role to generate tailored questions</CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle>New Interview Prep</CardTitle>
+              <CardDescription>
+                {selectedJobId
+                  ? 'Job details pre-filled from your analysis — generate questions below'
+                  : 'Enter the company and role to generate tailored questions'}
+              </CardDescription>
+            </div>
+            {selectedJobId && (
+              <button
+                onClick={handleClearSelection}
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleGenerate} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Company</Label>
-                <Input placeholder="e.g. Google" value={company} onChange={e => setCompany(e.target.value)} required />
+                <Input
+                  placeholder="e.g. Google"
+                  value={company}
+                  onChange={e => setCompany(e.target.value)}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>
-                <Input placeholder="e.g. Senior Frontend Engineer" value={role} onChange={e => setRole(e.target.value)} required />
+                <Input
+                  placeholder="e.g. Senior Frontend Engineer"
+                  value={role}
+                  onChange={e => setRole(e.target.value)}
+                  required
+                />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Job Description <span className="text-muted-foreground">(optional)</span></Label>
+              <Label>
+                Job Description{' '}
+                {!selectedJobId && <span className="text-muted-foreground">(optional)</span>}
+              </Label>
               <Textarea
                 placeholder="Paste the job description for more tailored questions..."
                 value={jobDesc}
                 onChange={e => setJobDesc(e.target.value)}
-                rows={4}
+                rows={selectedJobId ? 5 : 4}
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" disabled={loading}>
-              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</> : 'Generate Questions'}
+              {loading
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
+                : 'Generate Questions'}
             </Button>
           </form>
         </CardContent>
       </Card>
 
+      {/* Past sessions */}
       {allSessions.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">Past Sessions</h2>
@@ -99,7 +197,8 @@ export function InterviewPageClient({ sessions }: { sessions: Session[] }) {
                     <MessageSquare className="h-5 w-5 text-purple-600" />
                     <div>
                       <p className="font-medium">
-                        {session.job_descriptions?.title ?? 'Interview Session'} — {session.job_descriptions?.company ?? ''}
+                        {session.job_descriptions?.title ?? 'Interview Session'}
+                        {session.job_descriptions?.company ? ` — ${session.job_descriptions.company}` : ''}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {new Date(session.created_at).toLocaleDateString()} · {session.questions?.length ?? 0} questions
