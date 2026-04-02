@@ -4,74 +4,90 @@ import Groq from 'groq-sdk'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-const GENERATE_CV_PROMPT = (
-  resumeText: string,
+// Step 1: Extract everything from the raw resume text into clean structured JSON
+const EXTRACT_RESUME_PROMPT = (resumeText: string) => `
+You are a data extraction engine. Extract ALL information from the resume below into structured JSON.
+Do not summarize, skip, or rephrase anything — extract verbatim.
+
+RESUME TEXT:
+${resumeText}
+
+Return JSON:
+{
+  "name": "full name",
+  "email": "email or empty string",
+  "phone": "phone or empty string",
+  "location": "city/country or empty string",
+  "linkedin": "url or empty string",
+  "experience": [
+    {
+      "title": "exact job title",
+      "company": "exact company name",
+      "duration": "exact dates",
+      "bullets": ["every bullet point verbatim"]
+    }
+  ],
+  "skills": ["every skill mentioned"],
+  "education": [
+    { "degree": "exact degree", "institution": "exact institution", "year": "exact year" }
+  ],
+  "certifications": ["every certification if any"],
+  "languages": ["every language and level if any"],
+  "projects": [{ "name": "project name", "description": "exact description" }],
+  "extras": { "section name": ["items"] }
+}
+`
+
+// Step 2: Tailor the structured CV to the job
+const TAILOR_CV_PROMPT = (
+  structuredCV: string,
   jobTitle: string,
   company: string,
   jobDescription: string,
-  suggestions: string,
   language: string
 ) => `
-You are a senior professional CV writer specializing in adapting CVs for specific job applications.
+You are a senior professional CV writer. You have a candidate's full structured CV and a target job. Your task is to produce a tailored version optimized for this specific role.
 
-YOUR GOAL: Produce a tailored CV that fills between 1 and 1.5 A4 pages — never shorter, never much longer.
+OUTPUT LANGUAGE: ${language === 'he' ? 'Hebrew (עברית) — write all text in fluent, professional Hebrew. Use standard Israeli CV conventions.' : 'English — write in clear, professional British/American English.'}
 
-WHAT YOU MUST DO:
-1. Include EVERY job position, education entry, and section from the original CV — nothing may be omitted.
-2. For each job, keep 3-5 bullet points. If the original has more, keep the most relevant ones to the target job. If fewer, expand slightly using context clues from the original.
-3. Rephrase bullet points professionally to highlight relevant skills and achievements — use action verbs and quantify where possible based on original content. You may rephrase but NEVER fabricate facts, numbers, or technologies not mentioned in the original.
-4. Reorder bullets within each job: most relevant to the target job comes first.
-5. Write a strong 2-3 sentence professional summary using only facts from the CV.
-6. Skills: include all original skills, put the most relevant ones first.
-7. Output language: ${language === 'he' ? 'Hebrew (עברית) — write everything in fluent professional Hebrew' : 'English — write in fluent professional English'}
+TARGET ROLE: ${jobTitle} at ${company}
 
-LENGTH CONTROL — CRITICAL:
-- Target: 1 to 1.5 pages when printed on A4
-- Each job: exactly 3-5 bullet points (not more, not fewer)
-- Summary: exactly 2-3 sentences
-- Skills: single line or two, no long lists
-- If the original CV is very short: expand bullets with professional phrasing to fill at least 1 page
-- If the original CV is very long: trim to 3-4 bullets per job, keep all jobs
-
-INTEGRITY RULES:
-- Every fact, company name, job title, date, degree, and technology must come from the original CV
-- You may rephrase and improve language, but never invent new facts
-- Do not add skills, tools, or technologies not mentioned in the original
-
-ORIGINAL CV:
-${resumeText}
-
-TARGET JOB: ${jobTitle} at ${company}
 JOB DESCRIPTION:
 ${jobDescription}
 
-KEYWORDS TO HIGHLIGHT (use these naturally if they appear in the original CV):
-${suggestions}
+CANDIDATE'S FULL CV DATA:
+${structuredCV}
 
-Return ONLY valid JSON — no markdown, no explanation:
+TAILORING INSTRUCTIONS:
+1. SUMMARY: Write 3 strong sentences. Sentence 1: years of experience + main domain. Sentence 2: 2-3 most relevant skills/achievements that match this job. Sentence 3: what value the candidate brings to this specific role.
+2. EXPERIENCE: Keep ALL jobs. For each job write exactly 3-4 bullets:
+   - Start every bullet with a strong action verb (Led, Built, Designed, Improved, Managed, Delivered...)
+   - Each bullet must be specific and concrete — include numbers/scale/impact from the original where available
+   - Rephrase to use keywords from the job description where genuinely applicable
+   - Put the most relevant bullet first
+   - NEVER invent facts, numbers, technologies, or companies not in the original CV
+3. SKILLS: Keep all original skills. Sort so that skills matching the JD appear first.
+4. All other sections (education, certifications, languages, projects): keep exactly as-is, translate language if needed.
+
+LENGTH: Target exactly 1 to 1.5 A4 pages. 3-4 bullets per job, 3-sentence summary, skills on 1-2 lines.
+
+Return ONLY valid JSON:
 {
-  "name": "name from CV",
-  "email": "email from CV",
-  "phone": "phone from CV",
-  "location": "location from CV",
-  "linkedin": "linkedin from CV or empty string",
-  "summary": "2-3 sentence professional summary targeting this role",
+  "name": "from CV",
+  "email": "from CV",
+  "phone": "from CV",
+  "location": "from CV",
+  "linkedin": "from CV",
+  "summary": "3 tailored sentences",
   "experience": [
-    {
-      "title": "job title from CV",
-      "company": "company from CV",
-      "duration": "dates from CV",
-      "bullets": ["3-5 rephrased bullets, most relevant first"]
-    }
+    { "title": "from CV", "company": "from CV", "duration": "from CV", "bullets": ["3-4 tailored bullets"] }
   ],
-  "skills": ["all skills from CV, most relevant first"],
-  "education": [
-    { "degree": "degree from CV", "institution": "institution from CV", "year": "year from CV" }
-  ],
-  "certifications": ["only if exist in original"],
-  "languages": ["only if exist in original"],
-  "projects": [{ "name": "project name", "description": "1 sentence description" }],
-  "extras": { "section name": ["items"] }
+  "skills": ["all skills sorted by relevance"],
+  "education": [{ "degree": "from CV", "institution": "from CV", "year": "from CV" }],
+  "certifications": ["from CV if any"],
+  "languages": ["from CV if any"],
+  "projects": [{ "name": "from CV", "description": "from CV" }],
+  "extras": { "section": ["items"] }
 }
 `
 
@@ -270,27 +286,44 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Resume not found' }, { status: 404 })
   }
 
-  let cvData: Record<string, unknown>
+  const jsonSystem = 'You are a JSON API. Respond with valid JSON only — no markdown, no code fences, no explanation. Arrays must contain only quoted strings or objects, never unquoted text.'
+
+  // Step 1: Extract structured data from raw resume text
+  let structuredCV: string
   try {
-    const result = await groq.chat.completions.create({
+    const extractResult = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
-        {
-          role: 'system',
-          content: 'You are a JSON API. Respond with valid JSON only — no markdown, no code fences, no explanation.',
-        },
-        {
-          role: 'user',
-          content: GENERATE_CV_PROMPT(resume.parsed_text, jobTitle, company, jobDescription, tailored_suggestions || '', language),
-        },
+        { role: 'system', content: jsonSystem },
+        { role: 'user', content: EXTRACT_RESUME_PROMPT(resume.parsed_text) },
+      ],
+      max_tokens: 3000,
+      response_format: { type: 'json_object' },
+    })
+    structuredCV = extractResult.choices[0]?.message?.content ?? '{}'
+    // Validate it parsed
+    JSON.parse(structuredCV)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: 'Resume extraction failed: ' + msg }, { status: 500 })
+  }
+
+  // Step 2: Tailor the structured CV to the job
+  let cvData: Record<string, unknown>
+  try {
+    const tailorResult = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: jsonSystem },
+        { role: 'user', content: TAILOR_CV_PROMPT(structuredCV, jobTitle, company, jobDescription, language) },
       ],
       max_tokens: 4000,
       response_format: { type: 'json_object' },
     })
-    cvData = JSON.parse(result.choices[0]?.message?.content ?? '{}')
+    cvData = JSON.parse(tailorResult.choices[0]?.message?.content ?? '{}')
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: 'AI error: ' + msg }, { status: 500 })
+    return NextResponse.json({ error: 'CV tailoring failed: ' + msg }, { status: 500 })
   }
 
   const html = buildHTML(cvData, language, jobTitle || '', company || '')
