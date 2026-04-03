@@ -79,9 +79,8 @@ Return JSON:
         },
       ],
       max_tokens: 1000,
-      response_format: { type: 'json_object' },
     })
-    profile = JSON.parse(result.choices[0]?.message?.content ?? '{}') as ProfileSummary
+    profile = JSON.parse(jsonrepair(result.choices[0]?.message?.content ?? '{}')) as ProfileSummary
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'Profile analysis failed: ' + msg }, { status: 500 })
