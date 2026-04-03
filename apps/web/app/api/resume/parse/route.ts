@@ -52,7 +52,10 @@ export async function POST(request: NextRequest) {
       // PDF: extract text using pdf-parse if available, otherwise use base64 hint
       // Dynamically import to avoid build issues
       try {
-        const pdfParse = (await import('pdf-parse')).default
+        // Import the internal module directly — the main pdf-parse entry point reads
+        // test files from disk at load time which crashes the Next.js build.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pdfParse = (await import('pdf-parse/lib/pdf-parse.js' as any)).default
         const result = await pdfParse(buffer)
         parsedText = result.text.trim()
       } catch {
