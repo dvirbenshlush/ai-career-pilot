@@ -1,7 +1,5 @@
 import Groq from 'groq-sdk'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
-
 // Model fallback chain ordered by capability.
 // llama-3.1-8b-instant is the fast fallback when the 70b daily quota is exhausted.
 const MODEL_CHAIN = [
@@ -9,9 +7,15 @@ const MODEL_CHAIN = [
   'llama-3.1-8b-instant',
 ]
 
-type ChatParams = Omit<Parameters<typeof groq.chat.completions.create>[0], 'model'>
+export interface GroqChatParams {
+  messages: Groq.Chat.ChatCompletionMessageParam[]
+  max_tokens?: number
+  temperature?: number
+}
 
-export async function groqChat(params: ChatParams): Promise<Groq.Chat.ChatCompletion> {
+export async function groqChat(params: GroqChatParams): Promise<Groq.Chat.ChatCompletion> {
+  // Instantiate inside the function so process.env is read at request time, not build time
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
   let lastError: unknown
   for (const model of MODEL_CHAIN) {
     try {
