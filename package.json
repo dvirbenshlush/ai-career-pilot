@@ -3,5 +3,11 @@
   "private": true,
   "workspaces": [
     "apps/*"
-  ]
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/web",
+    "dev:messaging": "npm run dev --prefix services/messaging",
+    "build": "npm run build --workspace=apps/web",
+    "lint": "npm run lint --workspace=apps/web"
+  }
 }

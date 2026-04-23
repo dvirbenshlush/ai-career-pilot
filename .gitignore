@@ -2,3 +2,8 @@ node_modules
 package-lock.json
 .next
 .env*.local
+.env
+
+# Messaging service secrets & WhatsApp session
+services/messaging/.env
+services/messaging/auth_info/

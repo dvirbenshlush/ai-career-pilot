@@ -19,7 +19,32 @@
       "Bash(grep -E \"^tailwindcss$|^tw-animate\")",
       "Bash(grep -E \"^shadcn$|^tw-animate|^tailwindcss$\")",
       "Bash(grep -E \"^tailwindcss$|^tw-animate|^shadcn$\")",
-      "Bash(powershell -Command \"Remove-Item -Recurse -Force 'C:\\\\Users\\\\97252\\\\Desktop\\\\gitProjects\\\\ai-career-pilot\\\\node_modules' -ErrorAction SilentlyContinue; Remove-Item -Force 'C:\\\\Users\\\\97252\\\\Desktop\\\\gitProjects\\\\ai-career-pilot\\\\package-lock.json' -ErrorAction SilentlyContinue; echo 'done'\")"
+      "Bash(powershell -Command \"Remove-Item -Recurse -Force 'C:\\\\Users\\\\97252\\\\Desktop\\\\gitProjects\\\\ai-career-pilot\\\\node_modules' -ErrorAction SilentlyContinue; Remove-Item -Force 'C:\\\\Users\\\\97252\\\\Desktop\\\\gitProjects\\\\ai-career-pilot\\\\package-lock.json' -ErrorAction SilentlyContinue; echo 'done'\")",
+      "Bash(node -e \"const FC = require\\('@mendable/firecrawl-js'\\); const fc = new FC.default\\({apiKey:'test'}\\); console.log\\(Object.getOwnPropertyNames\\(Object.getPrototypeOf\\(fc\\)\\).filter\\(m => m !== 'constructor'\\)\\)\")",
+      "Bash(node -e \"const FC = require\\('@mendable/firecrawl-js'\\); const fc = new FC.default\\({apiKey:'test'}\\); const v1 = fc.v1\\(\\); console.log\\(Object.getOwnPropertyNames\\(Object.getPrototypeOf\\(v1\\)\\).filter\\(m => m !== 'constructor'\\)\\)\")",
+      "Bash(node -e \"const FC = require\\('@mendable/firecrawl-js'\\); const fc = new FC.default\\({apiKey:'test'}\\); console.log\\(Object.keys\\(fc\\)\\)\")",
+      "Bash(node -e \"const FC = require\\('@mendable/firecrawl-js'\\); const fc = new FC.default\\({apiKey:'test'}\\); const v1 = fc._v1; console.log\\(Object.getOwnPropertyNames\\(Object.getPrototypeOf\\(v1\\)\\).filter\\(m => m !== 'constructor'\\)\\)\")",
+      "Bash(node -e \"const pkg = require\\('./node_modules/firecrawl/package.json'\\); console.log\\(pkg.version, pkg.main, pkg.exports\\)\")",
+      "Bash(node -e \"const FC = require\\('@mendable/firecrawl-js'\\); console.log\\(JSON.stringify\\(Object.keys\\(FC\\)\\)\\)\")",
+      "Bash(node -e \"const {FirecrawlClient} = require\\('@mendable/firecrawl-js'\\); const fc = new FirecrawlClient\\({token:'test'}\\); console.log\\(Object.getOwnPropertyNames\\(Object.getPrototypeOf\\(fc\\)\\).filter\\(m => m !== 'constructor'\\)\\)\")",
+      "Bash(node -e \"const {FirecrawlClient} = require\\('@mendable/firecrawl-js'\\); const fc = new FirecrawlClient\\({apiKey:'test'}\\); console.log\\(Object.getOwnPropertyNames\\(Object.getPrototypeOf\\(fc\\)\\).filter\\(m => m !== 'constructor'\\)\\)\")",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "Bash(git remote:*)",
+      "Bash(npm list:*)",
+      "Bash(curl -s http://localhost:3001/health)",
+      "Bash(kill %1)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(xargs -r -I{} taskkill /PID {} /F)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s http://localhost:3001/whatsapp/status)",
+      "Bash(taskkill *)",
+      "Bash(grep -v '^0$')",
+      "Bash(curl *)"
     ]
   }
 }

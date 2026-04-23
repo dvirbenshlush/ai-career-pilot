@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Sparkles, FileText } from 'lucide-react'
+import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Sparkles, FileText, MessageCircle } from 'lucide-react'
+import { CommunityJobs } from '@/components/jobs/CommunityJobs'
 
 function LinkedInIcon({ className }: { className?: string }) {
   return (
@@ -210,7 +211,7 @@ function FilterRow({
   )
 }
 
-export function JobsPageClient({ savedJobs, resumeId }: { savedJobs: Job[]; resumeId: string | null }) {
+export function JobsPageClient({ savedJobs, resumeId, linkedinProfile }: { savedJobs: Job[]; resumeId: string | null; linkedinProfile?: string }) {
   // Manual search state
   const [role, setRole] = useState('')
   const [skills, setSkills] = useState('')
@@ -280,12 +281,15 @@ export function JobsPageClient({ savedJobs, resumeId }: { savedJobs: Job[]; resu
   return (
     <div className="space-y-6">
       <Tabs defaultValue="linkedin">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="linkedin" className="flex items-center gap-2">
-            <LinkedInIcon className="h-4 w-4" /> LinkedIn Profile Match
+            <LinkedInIcon className="h-4 w-4" /> LinkedIn Match
           </TabsTrigger>
           <TabsTrigger value="manual" className="flex items-center gap-2">
             <Search className="h-4 w-4" /> Manual Search
+          </TabsTrigger>
+          <TabsTrigger value="community" className="flex items-center gap-2">
+            <MessageCircle className="h-4 w-4" /> Community
           </TabsTrigger>
         </TabsList>
 
@@ -441,6 +445,10 @@ export function JobsPageClient({ savedJobs, resumeId }: { savedJobs: Job[]; resu
               <p>Set your search parameters above and click Find Jobs.</p>
             </div>
           )}
+        </TabsContent>
+        {/* Community tab */}
+        <TabsContent value="community" className="space-y-4 mt-4">
+          <CommunityJobs userProfile={linkedinProfile} />
         </TabsContent>
       </Tabs>
     </div>
