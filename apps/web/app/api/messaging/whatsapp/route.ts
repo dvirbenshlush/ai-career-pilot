@@ -69,19 +69,23 @@ export async function POST(req: NextRequest) {
         type Job = {
           title?: string; company?: string; location?: string
           salary_range?: string; remote?: boolean; url?: string
-          match_score?: number; tags?: string[]
+          match_score?: number; tags?: string[]; snippet?: string
+          source_name?: string
         }
         await supabase.from('job_opportunities').insert(
           (data.jobs as Job[]).map(j => ({
             user_id: user.id,
             title: j.title || 'משרה מוואטסאפ',
-            company: j.company || 'לא ידוע',
+            company: j.company || '',
             location: j.location || '',
             salary_range: j.salary_range || null,
             remote: j.remote ?? false,
             url: j.url || '',
             match_score: j.match_score ?? 50,
             tags: j.tags || [],
+            source: 'whatsapp',
+            source_name: j.source_name || null,
+            snippet: j.snippet || null,
           }))
         )
       }

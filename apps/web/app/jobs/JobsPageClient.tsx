@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Sparkles, FileText, MessageCircle } from 'lucide-react'
+import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Sparkles, FileText, MessageCircle, Bookmark } from 'lucide-react'
 import { CommunityJobs } from '@/components/jobs/CommunityJobs'
+import { SavedJobsTab } from '@/components/jobs/SavedJobsTab'
 
 function LinkedInIcon({ className }: { className?: string }) {
   return (
@@ -280,18 +281,26 @@ export function JobsPageClient({ savedJobs, resumeId, linkedinProfile }: { saved
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="linkedin">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="linkedin" className="flex items-center gap-2">
-            <LinkedInIcon className="h-4 w-4" /> LinkedIn Match
+      <Tabs defaultValue="saved">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="saved" className="flex items-center gap-1.5 text-xs">
+            <Bookmark className="h-3.5 w-3.5" /> כל המשרות
           </TabsTrigger>
-          <TabsTrigger value="manual" className="flex items-center gap-2">
-            <Search className="h-4 w-4" /> Manual Search
+          <TabsTrigger value="linkedin" className="flex items-center gap-1.5 text-xs">
+            <LinkedInIcon className="h-3.5 w-3.5" /> LinkedIn
           </TabsTrigger>
-          <TabsTrigger value="community" className="flex items-center gap-2">
-            <MessageCircle className="h-4 w-4" /> Community
+          <TabsTrigger value="manual" className="flex items-center gap-1.5 text-xs">
+            <Search className="h-3.5 w-3.5" /> חיפוש
+          </TabsTrigger>
+          <TabsTrigger value="community" className="flex items-center gap-1.5 text-xs">
+            <MessageCircle className="h-3.5 w-3.5" /> קהילה
           </TabsTrigger>
         </TabsList>
+
+        {/* Saved jobs tab */}
+        <TabsContent value="saved" className="mt-4">
+          <SavedJobsTab />
+        </TabsContent>
 
         {/* LinkedIn tab */}
         <TabsContent value="linkedin" className="space-y-4 mt-4">

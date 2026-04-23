@@ -118,13 +118,15 @@ Only include actual job postings. Skip anything that is not a job listing.`,
       scoredJobs.map(j => ({
         user_id: user.id,
         title: j.title || role,
-        company: j.company || 'Unknown',
-        location: j.location || location || 'Unknown',
+        company: j.company || '',
+        location: j.location || location || '',
         salary_range: j.salary_range || null,
         remote: j.remote ?? false,
         url: j.url,
         match_score: j.match_score,
         tags: j.tags || [],
+        source: 'search',
+        snippet: j.snippet || null,
       }))
     )
   }

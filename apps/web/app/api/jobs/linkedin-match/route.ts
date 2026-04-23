@@ -193,12 +193,15 @@ Return JSON:
         user_id: user.id,
         title: j.title,
         company: j.company,
-        location: j.location || location || 'Unknown',
+        location: j.location || location || '',
         salary_range: j.salary_range || null,
         remote: j.remote ?? false,
         url: j.url,
         match_score: j.match_score,
         tags: j.tags || [],
+        source: 'linkedin',
+        snippet: j.snippet || null,
+        why_match: j.why_match || null,
       }))
     )
   }
