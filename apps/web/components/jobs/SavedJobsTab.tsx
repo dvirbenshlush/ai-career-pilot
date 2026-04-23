@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import {
   Loader2, ExternalLink, MapPin, DollarSign, Wifi, Sparkles,
   Trash2, Search, RefreshCw, Building2, ChevronDown, ChevronUp,
+  Briefcase, Mail, Phone,
 } from 'lucide-react'
 
 interface SavedJob {
@@ -24,6 +25,9 @@ interface SavedJob {
   source_name: string | null
   snippet: string | null
   why_match: string | null
+  experience_required: string | null
+  contact: string | null
+  raw_message: string | null
   found_at: string
 }
 
@@ -76,6 +80,28 @@ function ScoreBadge({ score }: { score: number }) {
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color}`}>{score}% התאמה</span>
 }
 
+function ContactChip({ contact }: { contact: string }) {
+  const isEmail = contact.includes('@')
+  const isPhone = /^[\d\s\+\-\(\)]{7,}$/.test(contact.trim())
+  const isUrl = contact.startsWith('http')
+
+  if (isEmail) return (
+    <a href={`mailto:${contact}`} className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+      <Mail className="h-3 w-3 shrink-0" />{contact}
+    </a>
+  )
+  if (isUrl) return (
+    <a href={contact} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-600 hover:underline truncate max-w-xs">
+      <ExternalLink className="h-3 w-3 shrink-0" />{contact}
+    </a>
+  )
+  return (
+    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+      <Phone className="h-3 w-3 shrink-0" />{contact}
+    </span>
+  )
+}
+
 function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string) => void }) {
   const [deleting, setDeleting] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -95,7 +121,8 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
   }
 
   const date = new Date(job.found_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
-  const hasFullContent = !!(job.snippet && job.snippet.length > 120)
+  const fullText = job.raw_message || job.snippet || ''
+  const hasFullText = fullText.length > 150
 
   return (
     <Card className="hover:shadow-sm transition-shadow">
@@ -127,6 +154,18 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
               <span className="text-muted-foreground/50">{date}</span>
             </div>
 
+            {/* AI summary */}
+            {job.snippet && (
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{job.snippet}</p>
+            )}
+
+            {/* Experience required */}
+            {job.experience_required && (
+              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1.5 flex items-start gap-1">
+                <Briefcase className="h-3 w-3 mt-0.5 shrink-0" />{job.experience_required}
+              </p>
+            )}
+
             {/* Why match */}
             {job.why_match && (
               <p className="text-xs text-indigo-600 mt-1.5 flex items-start gap-1">
@@ -134,23 +173,10 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
               </p>
             )}
 
-            {/* Snippet — collapsed by default if long */}
-            {job.snippet && (
+            {/* Contact */}
+            {job.contact && (
               <div className="mt-1.5">
-                <p className={`text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed ${!expanded && hasFullContent ? 'line-clamp-3' : ''}`}>
-                  {job.snippet}
-                </p>
-                {hasFullContent && (
-                  <button
-                    onClick={() => setExpanded(e => !e)}
-                    className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {expanded
-                      ? <><ChevronUp className="h-3 w-3" /> הסתר</>
-                      : <><ChevronDown className="h-3 w-3" /> הצג הכל</>
-                    }
-                  </button>
-                )}
+                <ContactChip contact={job.contact} />
               </div>
             )}
 
@@ -158,6 +184,26 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
             {job.tags?.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {job.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
+              </div>
+            )}
+
+            {/* Full original message collapsible */}
+            {hasFullText && (
+              <div className="mt-2 border-t pt-2">
+                <button
+                  onClick={() => setExpanded(e => !e)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {expanded
+                    ? <><ChevronUp className="h-3 w-3" /> הסתר הודעה מקורית</>
+                    : <><ChevronDown className="h-3 w-3" /> הצג הודעה מקורית</>
+                  }
+                </button>
+                {expanded && (
+                  <p className="mt-1.5 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed bg-muted/40 rounded p-2 max-h-96 overflow-y-auto">
+                    {fullText}
+                  </p>
+                )}
               </div>
             )}
           </div>
