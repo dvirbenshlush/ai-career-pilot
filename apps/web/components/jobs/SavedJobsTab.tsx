@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
   Loader2, ExternalLink, MapPin, DollarSign, Wifi, Sparkles,
-  Trash2, Search, RefreshCw, Building2,
+  Trash2, Search, RefreshCw, Building2, ChevronDown, ChevronUp,
 } from 'lucide-react'
 
 interface SavedJob {
@@ -78,6 +78,7 @@ function ScoreBadge({ score }: { score: number }) {
 
 function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string) => void }) {
   const [deleting, setDeleting] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -94,10 +95,11 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
   }
 
   const date = new Date(job.found_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
+  const hasFullContent = !!(job.snippet && job.snippet.length > 120)
 
   return (
     <Card className="hover:shadow-sm transition-shadow">
-      <CardContent className="pt-4 pb-4">
+      <CardContent className="pt-4 pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
 
@@ -116,13 +118,13 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
             {/* Company & meta */}
             {job.company && (
               <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                <Building2 className="h-3.5 w-3.5" /> {job.company}
+                <Building2 className="h-3.5 w-3.5 shrink-0" /> {job.company}
               </p>
             )}
-            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
               {job.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>}
               {job.salary_range && <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{job.salary_range}</span>}
-              <span className="text-muted-foreground/60">{date}</span>
+              <span className="text-muted-foreground/50">{date}</span>
             </div>
 
             {/* Why match */}
@@ -132,9 +134,24 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
               </p>
             )}
 
-            {/* Snippet */}
-            {job.snippet && !job.why_match && (
-              <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{job.snippet}</p>
+            {/* Snippet — collapsed by default if long */}
+            {job.snippet && (
+              <div className="mt-1.5">
+                <p className={`text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed ${!expanded && hasFullContent ? 'line-clamp-3' : ''}`}>
+                  {job.snippet}
+                </p>
+                {hasFullContent && (
+                  <button
+                    onClick={() => setExpanded(e => !e)}
+                    className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {expanded
+                      ? <><ChevronUp className="h-3 w-3" /> הסתר</>
+                      : <><ChevronDown className="h-3 w-3" /> הצג הכל</>
+                    }
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Tags */}
@@ -147,12 +164,14 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
 
           {/* Actions */}
           <div className="flex flex-col items-end gap-2 shrink-0">
-            {job.url && (
+            {job.url ? (
               <a href={job.url} target="_blank" rel="noopener noreferrer">
                 <Button size="sm" className="whitespace-nowrap">
                   <ExternalLink className="h-3.5 w-3.5 mr-1" /> Apply
                 </Button>
               </a>
+            ) : (
+              <span className="text-xs text-muted-foreground/50 italic">אין קישור</span>
             )}
             <button
               onClick={handleDelete}
