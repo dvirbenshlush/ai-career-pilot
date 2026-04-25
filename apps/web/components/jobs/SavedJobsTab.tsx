@@ -278,6 +278,26 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
         return
       }
       window.open(data.gmailUrl, '_blank')
+
+      // Mark as applied
+      try {
+        if (job.application_id) {
+          await fetch(`/api/applications/${job.application_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'applied' }),
+          })
+          onStatusChange(job.id, 'applied', job.application_id)
+        } else {
+          const appRes = await fetch('/api/applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_opportunity_id: job.id, status: 'applied' }),
+          })
+          const appData = await appRes.json() as { application?: { id: string } }
+          onStatusChange(job.id, 'applied', appData.application?.id ?? '')
+        }
+      } catch { /* status update is best-effort */ }
     } catch {
       setSendError('שגיאת רשת — נסה שוב')
     } finally {
@@ -474,7 +494,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
             {/* Tags */}
             {job.tags?.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
-                {job.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
+                {job.tags.map((tag, i) => <Badge key={`${i}-${tag}`} variant="secondary" className="text-xs">{tag}</Badge>)}
               </div>
             )}
 

@@ -86,42 +86,46 @@ export async function POST(req: NextRequest) {
           .map(j => (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim())
           .filter(Boolean)
 
+        // Check across ALL sources — same message might appear in telegram and whatsapp
         const { data: existing } = await supabase
           .from('job_opportunities')
           .select('message_fingerprint')
           .eq('user_id', user.id)
-          .eq('source', 'whatsapp')
           .in('message_fingerprint', fps)
 
         const existingSet = new Set((existing ?? []).map(r => r.message_fingerprint))
+        const batchSeen = new Set<string>()
         const newJobs = validJobs.filter(j => {
           const fp = (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim()
-          return !existingSet.has(fp)
+          if (!fp || existingSet.has(fp) || batchSeen.has(fp)) return false
+          batchSeen.add(fp)
+          return true
         })
 
         if (newJobs.length > 0) {
-          const { error: insertErr } = await supabase.from('job_opportunities').insert(
-            newJobs.map(j => ({
-              user_id: user.id,
-              title: j.title!,
-              company: j.company || '',
-              location: j.location || '',
-              salary_range: j.salary_range || null,
-              remote: j.remote ?? false,
-              url: j.url || '',
-              match_score: j.match_score ?? 50,
-              tags: j.tags || [],
-              source: 'whatsapp',
-              source_name: j.source_name || null,
-              snippet: j.snippet || null,
-              experience_required: j.experience_required || null,
-              contact: j.contact || null,
-              raw_message: j.raw_message || null,
-              poster_name: j.poster_name || null,
-              message_fingerprint: (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim() || null,
-              found_at: new Date().toISOString(),
-            }))
-          )
+          const rows = newJobs.map(j => ({
+            user_id: user.id,
+            title: j.title!,
+            company: j.company || '',
+            location: j.location || '',
+            salary_range: j.salary_range || null,
+            remote: j.remote === true,
+            url: j.url || '',
+            match_score: j.match_score ?? 50,
+            tags: j.tags || [],
+            source: 'whatsapp',
+            source_name: j.source_name || null,
+            snippet: j.snippet || null,
+            experience_required: j.experience_required || null,
+            contact: j.contact || null,
+            raw_message: j.raw_message || null,
+            poster_name: j.poster_name || null,
+            message_fingerprint: (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim() || null,
+            found_at: new Date().toISOString(),
+          }))
+          const { error: insertErr } = await supabase
+            .from('job_opportunities')
+            .upsert(rows, { onConflict: 'user_id,message_fingerprint', ignoreDuplicates: true })
           if (insertErr) {
             console.error('[WhatsApp] insert error:', insertErr.message)
             return NextResponse.json({ ...data, dbError: insertErr.message }, { status })

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Wifi, MapPin, DollarSign, Sparkles, ExternalLink, RefreshCw, CheckCircle, XCircle, MessageCircle, Send, Search } from 'lucide-react'
+import { Loader2, Wifi, MapPin, DollarSign, Sparkles, ExternalLink, RefreshCw, CheckCircle, XCircle, MessageCircle, Send, Search, ImageIcon } from 'lucide-react'
 
 interface ParsedJob {
   title: string
@@ -21,6 +21,7 @@ interface ParsedJob {
   source_name: string
   match_score: number
   raw_message: string
+  from_image?: boolean
 }
 
 interface WAGroup {
@@ -84,6 +85,11 @@ function CommunityJobCard({ job }: { job: ParsedJob }) {
               <h3 className="font-semibold text-sm">{job.title || 'Job Opportunity'}</h3>
               <ScoreBadge score={Math.round(job.match_score)} />
               <SourceBadge source={job.source} name={job.source_name} />
+              {job.from_image && (
+                <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full" title="חולצה מתמונה (OCR)">
+                  <ImageIcon className="h-3 w-3" /> מתמונה
+                </span>
+              )}
               {job.remote && (
                 <span className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
                   <Wifi className="h-3 w-3" /> Remote
@@ -102,7 +108,7 @@ function CommunityJobCard({ job }: { job: ParsedJob }) {
             )}
             {job.tags?.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
-                {job.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
+                {job.tags.map((tag, i) => <Badge key={`${i}-${tag}`} variant="secondary" className="text-xs">{tag}</Badge>)}
               </div>
             )}
             {fullText && (
@@ -581,6 +587,7 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
   const [validating, setValidating] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [jobs, setJobs] = useState<ParsedJob[]>([])
+  const [scanInfo, setScanInfo] = useState<{ messagesScanned: number; imagesFound: number; imagesOcrd: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [maxAgeDays, setMaxAgeDays] = useState(14)
@@ -611,15 +618,17 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
     if (channelList.length === 0) return
     setScanning(true)
     setError(null)
+    setScanInfo(null)
     try {
       const res = await fetch('/api/messaging/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'scan', botToken: botToken || undefined, channels: channelList, userProfile, maxAgeDays }),
       })
-      const data = await res.json() as { jobs?: ParsedJob[]; error?: string }
+      const data = await res.json() as { jobs?: ParsedJob[]; error?: string; messagesScanned?: number; imagesFound?: number; imagesOcrd?: number }
       if (!res.ok) throw new Error(data.error ?? 'Scan failed')
       setJobs(data.jobs ?? [])
+      setScanInfo({ messagesScanned: data.messagesScanned ?? 0, imagesFound: data.imagesFound ?? 0, imagesOcrd: data.imagesOcrd ?? 0 })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Scan failed')
     } finally {
@@ -714,6 +723,22 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
           </Button>
         </CardContent>
       </Card>
+
+      {scanInfo && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="text-muted-foreground">נסרקו {scanInfo.messagesScanned} הודעות</span>
+          {scanInfo.imagesFound > 0 && (
+            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${scanInfo.imagesOcrd > 0 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600'}`}>
+              <ImageIcon className="h-3 w-3" />
+              {scanInfo.imagesFound} תמונות נמצאו
+              {scanInfo.imagesOcrd > 0 ? ` · ${scanInfo.imagesOcrd} OCR'd ✓` : ' · 0 OCR (תמונות ללא טקסט)'}
+            </span>
+          )}
+          {jobs.length === 0 && scanInfo.messagesScanned === 0 && (
+            <span className="text-amber-600">הערוץ פרטי או אינו ציבורי — נסה ערוץ ציבורי אחר</span>
+          )}
+        </div>
+      )}
 
       {jobs.length > 0 && (
         <div className="space-y-3">

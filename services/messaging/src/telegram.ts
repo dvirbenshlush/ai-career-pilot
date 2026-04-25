@@ -1,10 +1,12 @@
 import TelegramBot from 'node-telegram-bot-api'
+import { extractTextFromImage } from './groq.js'
 
 export interface TelegramMessage {
   text: string
   source: 'telegram'
   source_name: string
   sender_name: string
+  from_image?: boolean
 }
 
 // ── HTML helpers ──────────────────────────────────────────────────────────────
@@ -26,10 +28,13 @@ function stripHtml(html: string): string {
 // ── Public channel scraper ─────────────────────────────────────────────────────
 // Uses t.me/s/<channel> preview page — no bot membership required for public channels
 
-async function scrapePublicChannel(
-  channelName: string,
-  maxAgeDays: number
-): Promise<TelegramMessage[]> {
+export interface FetchResult {
+  messages: TelegramMessage[]
+  imagesFound: number
+  imagesOcrd: number
+}
+
+async function scrapePublicChannel(channelName: string, maxAgeDays: number): Promise<FetchResult> {
   const name = channelName.replace(/^@/, '')
   const cutoffSec = Math.floor(Date.now() / 1000) - maxAgeDays * 24 * 3600
 
@@ -42,7 +47,7 @@ async function scrapePublicChannel(
 
   if (!res.ok) {
     console.log(`[TG] ${channelName}: HTTP ${res.status} — channel may be private or not exist`)
-    return []
+    return { messages: [], imagesFound: 0, imagesOcrd: 0 }
   }
 
   const html = await res.text()
@@ -51,6 +56,8 @@ async function scrapePublicChannel(
   // Split on that boundary so we process one message at a time
   const chunks = html.split(/(?=<div[^>]+data-post=["'][^"']+["'])/)
   const messages: TelegramMessage[] = []
+  let imagesFound = 0
+  let imagesOcrd = 0
 
   for (const chunk of chunks) {
     // Timestamp
@@ -59,17 +66,47 @@ async function scrapePublicChannel(
     const timestamp = Math.floor(new Date(timeMatch[1]).getTime() / 1000)
     if (isNaN(timestamp) || timestamp < cutoffSec) continue
 
-    // Message text (innerText of .tgme_widget_message_text)
+    // Message text — skip chunks with no text div (image-only posts handled separately below)
     const textMatch = chunk.match(/class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/)
-    if (!textMatch) continue
-    const text = stripHtml(textMatch[1])
-    if (!text || text.length < 5) continue
+    const text = textMatch ? stripHtml(textMatch[1]) : ''
 
-    messages.push({ text, source: 'telegram', source_name: name, sender_name: '' })
+    // Detect image URLs — Telegram CDN URLs have no file extension
+    // e.g. https://cdn4.telesco.pe/file/<hash>
+    const photoMatch = chunk.match(/background-image:url\('(https:\/\/cdn[^']{20,})'\)/)
+    const imageUrl = photoMatch?.[1] ?? null
+
+    if (imageUrl) imagesFound++
+
+    // Always push text when present — guaranteed baseline
+    if (text && text.length >= 5) {
+      messages.push({ text, source: 'telegram', source_name: name, sender_name: '' })
+    }
+
+    // OCR: run when there's an image AND text is short (caption-only) or absent
+    // Job channels post full descriptions inside images; captions are rarely enough
+    if (imageUrl && text.length < 60) {
+      try {
+        const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10000) })
+        if (imgRes.ok) {
+          const buf = await imgRes.arrayBuffer()
+          const base64 = Buffer.from(buf).toString('base64')
+          const ct = imgRes.headers.get('content-type') ?? 'image/jpeg'
+          const mime = ct.includes('png') ? 'image/png' : ct.includes('webp') ? 'image/webp' : 'image/jpeg'
+          const ocrText = await extractTextFromImage(base64, mime)
+          if (ocrText && ocrText.length >= 10) {
+            imagesOcrd++
+            console.log(`[TG OCR] ${name}: extracted ${ocrText.length} chars from image`)
+            messages.push({ text: ocrText, source: 'telegram', source_name: name, sender_name: '', from_image: true })
+          }
+        }
+      } catch (e) {
+        console.warn(`[TG OCR] failed for ${imageUrl}:`, e instanceof Error ? e.message : e)
+      }
+    }
   }
 
-  console.log(`[TG] ${channelName}: ${messages.length} messages in last ${maxAgeDays}d`)
-  return messages
+  console.log(`[TG] ${channelName}: ${messages.length} messages in last ${maxAgeDays}d (${imagesFound} images found, ${imagesOcrd} OCR'd)`)
+  return { messages, imagesFound, imagesOcrd }
 }
 
 // ── Bot API fallback (for private groups where bot is a member) ────────────────
@@ -86,7 +123,6 @@ async function fetchViaBot(
   const messages: TelegramMessage[] = []
 
   try {
-    // getUpdates only returns messages the bot has actually received (private groups, not channels)
     const updates = await bot.getUpdates({ limit: 100, offset: -100, allowed_updates: ['message', 'channel_post'] })
     for (const upd of updates) {
       const msg = upd.channel_post ?? upd.message
@@ -112,19 +148,24 @@ export async function fetchChannelMessages(
   botToken: string,
   channels: string[],
   maxAgeDays = 3
-): Promise<TelegramMessage[]> {
+): Promise<FetchResult> {
   const all: TelegramMessage[] = []
+  let imagesFound = 0
+  let imagesOcrd = 0
 
   for (const channel of channels) {
-    // Try public scrape first; fall back to bot API for private groups
-    let msgs = await scrapePublicChannel(channel, maxAgeDays)
+    const result = await scrapePublicChannel(channel, maxAgeDays)
+    let msgs = result.messages
+    imagesFound += result.imagesFound
+    imagesOcrd += result.imagesOcrd
+
     if (msgs.length === 0 && botToken) {
       msgs = await fetchViaBot(botToken, channel, maxAgeDays)
     }
     all.push(...msgs)
   }
 
-  return all
+  return { messages: all, imagesFound, imagesOcrd }
 }
 
 export async function validateBotToken(token: string): Promise<{ valid: boolean; botName?: string }> {

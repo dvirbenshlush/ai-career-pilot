@@ -21,13 +21,15 @@ export interface ParsedJob {
   contact: string           // email / phone / link for applying
   poster_name: string       // name of person who posted in the group
   source: 'whatsapp' | 'telegram' | 'url'
+  from_image: boolean       // true when job was extracted via OCR from an image
   source_name: string
   match_score: number
   raw_message: string
 }
 
-const MODEL = 'llama-3.1-8b-instant'   // 500k TPD; TPM limit is 6000 so keep batches small
-const CHUNK_SIZE = 4                    // 4 msgs × 200 chars ≈ ~1500 input tokens, safe under 6k TPM
+const MODEL        = 'llama-3.1-8b-instant'       // 500k TPD; TPM limit is 6000 so keep batches small
+const VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct' // Groq vision model for image OCR
+const CHUNK_SIZE = 4                              // 4 msgs × 200 chars ≈ ~1500 input tokens, safe under 6k TPM
 
 function hasTitle(j: ParsedJob): boolean {
   const t = j.title?.trim().toLowerCase()
@@ -35,6 +37,39 @@ function hasTitle(j: ParsedJob): boolean {
 }
 
 const EMAIL_RE = /[\w.+\-]+@[\w\-]+(?:\.[a-zA-Z]{2,})+/g
+
+// ── Vision OCR ────────────────────────────────────────────────────────────────
+
+export async function extractTextFromImage(
+  base64: string,
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg'
+): Promise<string> {
+  try {
+    const completion = await getGroq().chat.completions.create({
+      model: VISION_MODEL,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: `data:${mimeType};base64,${base64}` },
+            },
+            {
+              type: 'text',
+              text: 'This may be a job posting in Hebrew or English. Extract ALL visible text from the image exactly as written. Return only the raw text, no commentary.',
+            },
+          ] as never,
+        },
+      ],
+      max_tokens: 1000,
+    })
+    return completion.choices[0]?.message?.content?.trim() ?? ''
+  } catch (e) {
+    console.warn('[Groq Vision] OCR failed:', e instanceof Error ? e.message : e)
+    return ''
+  }
+}
 
 function fillMissingContact(j: ParsedJob): ParsedJob {
   if (j.contact?.trim()) return j
@@ -45,7 +80,7 @@ function fillMissingContact(j: ParsedJob): ParsedJob {
 }
 
 async function parseBatch(
-  messages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string }>,
+  messages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string; from_image?: boolean }>,
   profileContext: string
 ): Promise<ParsedJob[]> {
   const batch = messages
@@ -102,8 +137,9 @@ Return JSON: { "jobs": [ {...}, ... ] }`,
     const result = jobs
       .map(j => {
         const idx = parseInt(j.raw_message, 10)
-        const original = !isNaN(idx) && messages[idx] ? messages[idx].text : j.raw_message
-        return { ...j, raw_message: original }
+        const srcMsg = !isNaN(idx) ? messages[idx] : undefined
+        const original = srcMsg ? srcMsg.text : j.raw_message
+        return { ...j, raw_message: original, from_image: srcMsg?.from_image ?? false }
       })
       .filter(hasTitle)
       .map(fillMissingContact)
@@ -179,7 +215,7 @@ If no jobs found, return { "jobs": [] }`,
 }
 
 export async function parseJobMessages(
-  rawMessages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string }>,
+  rawMessages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string; from_image?: boolean }>,
   userProfile?: string
 ): Promise<ParsedJob[]> {
   const messages = rawMessages

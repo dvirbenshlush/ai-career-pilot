@@ -3,9 +3,11 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  downloadMediaMessage,
   WASocket,
   WAMessage,
 } from '@whiskeysockets/baileys'
+import { extractTextFromImage } from './groq.js'
 import { Boom } from '@hapi/boom'
 import qrcode from 'qrcode'
 import path from 'path'
@@ -21,7 +23,7 @@ const logger = pino({ level: 'silent' })
 // ── Message store — persisted to disk ─────────────────────────────────────────
 const MAX_PER_GROUP = 500
 
-interface StoredMsg { text: string; timestamp: number; senderName: string }
+interface StoredMsg { text: string; timestamp: number; senderName: string; fromImage?: boolean }
 const msgStore = new Map<string, StoredMsg[]>()
 
 // Load from disk on startup
@@ -56,14 +58,14 @@ function scheduleSave() {
   }, 4000)
 }
 
-function storeMsg(jid: string, text: string, ts: number, senderName: string) {
+function storeMsg(jid: string, text: string, ts: number, senderName: string, fromImage = false) {
   const t = text.trim()
   if (!t || !ts) return
   if (!msgStore.has(jid)) msgStore.set(jid, [])
   const arr = msgStore.get(jid)!
   // Deduplicate — same message arriving from two syncs
   if (arr.some(m => m.timestamp === ts && m.text === t)) return
-  arr.push({ text: t, timestamp: ts, senderName })
+  arr.push({ text: t, timestamp: ts, senderName, fromImage })
   if (arr.length > MAX_PER_GROUP) arr.splice(0, arr.length - MAX_PER_GROUP)
   scheduleSave()
 }
@@ -210,10 +212,37 @@ export async function connectWhatsApp(): Promise<void> {
     console.log(`[WA] History sync: ${messages.length} msgs received, ${saved} new group msgs added, ${total} total stored (isLatest=${isLatest})`)
   })
 
-  // Real-time new messages
+  // Real-time new messages — also OCR image-only posts
   sock.ev.on('messages.upsert', ({ messages, type }) => {
     if (type !== 'notify') return
     ingest(messages as WAMessage[])
+
+    // Process image messages that have no caption (fire-and-forget)
+    for (const msg of messages as WAMessage[]) {
+      const jid = msg.key?.remoteJid ?? ''
+      if (!jid.endsWith('@g.us')) continue
+      const imgMsg = msg.message?.imageMessage
+      if (!imgMsg) continue
+      const caption = imgMsg.caption?.trim() ?? ''
+      if (caption.length >= 20) continue // already has enough text
+      const ts = Number(msg.messageTimestamp ?? 0)
+      const senderName = (msg as { pushName?: string }).pushName ?? ''
+
+      ;(async () => {
+        try {
+          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage })
+          const base64 = (buffer as Buffer).toString('base64')
+          const ocrText = await extractTextFromImage(base64, 'image/jpeg')
+          const combined = [caption, ocrText].filter(Boolean).join('\n').trim()
+          if (combined.length >= 10) {
+            storeMsg(jid, combined, ts, senderName, true)
+            console.log(`[WA OCR] stored ${combined.length} chars from image in ${jid}`)
+          }
+        } catch (e) {
+          console.warn('[WA OCR] failed:', e instanceof Error ? e.message : e)
+        }
+      })()
+    }
   })
 }
 
@@ -235,6 +264,7 @@ export interface RawMessage {
   source_name: string
   sender_name: string
   timestamp: number
+  from_image?: boolean
 }
 
 export function fetchGroupName(gid: string): string | null {
@@ -253,8 +283,8 @@ export function fetchGroupMessages(groupIds: string[], maxAgeDays = 3): RawMessa
     const all = msgStore.get(gid) ?? []
     const recent = all.filter(m => m.timestamp >= cutoffSec)
     console.log(`[WA] group "${name}": ${all.length} stored, ${recent.length} in last ${maxAgeDays}d`)
-    for (const { text, timestamp, senderName } of recent) {
-      out.push({ text, source: 'whatsapp', source_name: name, sender_name: senderName, timestamp })
+    for (const { text, timestamp, senderName, fromImage } of recent) {
+      out.push({ text, source: 'whatsapp', source_name: name, sender_name: senderName, timestamp, from_image: fromImage })
     }
   }
 
