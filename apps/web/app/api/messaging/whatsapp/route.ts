@@ -36,9 +36,8 @@ export async function POST(req: NextRequest) {
     action: string
     groupIds?: string[]
     userProfile?: string
-    maxAgeDays?: number
   }
-  const { action, groupIds, userProfile, maxAgeDays = 7 } = body
+  const { action, groupIds, userProfile } = body
 
   if (action === 'connect') {
     const { text, status } = await proxyPost('/whatsapp/connect', {})
@@ -56,12 +55,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'scan') {
-    const { ok, status, text } = await proxyPost('/whatsapp/scan', { groupIds, userProfile, limit: 50 })
+    const { ok, status, text } = await proxyPost('/whatsapp/scan', { groupIds, userProfile })
     if (!ok) return new NextResponse(text, { status, headers: { 'Content-Type': 'application/json' } })
 
     const data = JSON.parse(text) as { jobs: unknown[]; messagesScanned: number }
 
-    // Upsert jobs — keep existing ones, add only new (dedup by message_fingerprint)
+    // Upsert jobs — keep existing, add only new (dedup by message_fingerprint)
     try {
       const supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -71,7 +70,7 @@ export async function POST(req: NextRequest) {
           salary_range?: string; remote?: boolean; url?: string
           match_score?: number; tags?: string[]; snippet?: string
           source_name?: string; experience_required?: string
-          contact?: string; raw_message?: string
+          contact?: string; raw_message?: string; poster_name?: string
         }
         await supabase.from('job_opportunities').upsert(
           (data.jobs as Job[]).map(j => ({
@@ -90,6 +89,7 @@ export async function POST(req: NextRequest) {
             experience_required: j.experience_required || null,
             contact: j.contact || null,
             raw_message: j.raw_message || null,
+            poster_name: j.poster_name || null,
             message_fingerprint: (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim() || null,
           })),
           { onConflict: 'user_id,source,message_fingerprint', ignoreDuplicates: true }

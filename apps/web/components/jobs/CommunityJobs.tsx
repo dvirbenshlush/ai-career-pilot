@@ -119,6 +119,8 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
   const [qrBase64, setQrBase64] = useState<string | null>(null)
   const [groups, setGroups] = useState<WAGroup[]>([])
   const [bufferedGroups, setBufferedGroups] = useState(0)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [storeSummary, setStoreSummary] = useState<Record<string, number>>({})
   const [groupSearch, setGroupSearch] = useState('')
   const [selectedGroups, setSelectedGroups] = useState<string[]>([])
   const [scanning, setScanning] = useState(false)
@@ -138,11 +140,15 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
         qrBase64: string | null
         groups: WAGroup[]
         bufferedGroups: number
+        historyLoaded: boolean
+        storeSummary: Record<string, number>
       }
       setStatus(data.status)
       setQrBase64(data.qrBase64 ?? null)
       setGroups(data.groups ?? [])
       setBufferedGroups(data.bufferedGroups ?? 0)
+      setHistoryLoaded(data.historyLoaded ?? false)
+      setStoreSummary(data.storeSummary ?? {})
     } catch { /* service not running */ }
   }
 
@@ -218,7 +224,7 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
       const res = await fetch('/api/messaging/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'scan', groupIds: selectedGroups, userProfile, maxAgeDays: 7 }),
+        body: JSON.stringify({ action: 'scan', groupIds: selectedGroups, userProfile }),
       })
       const data = await res.json() as { jobs?: ParsedJob[]; messagesScanned?: number; error?: string }
       if (!res.ok) throw new Error(data.error ?? 'Scan failed')
@@ -269,9 +275,13 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
                 <>
                   <CheckCircle className="h-4 w-4 text-green-600" />
                   <span className="text-sm text-green-700 font-medium">מחובר</span>
-                  {bufferedGroups > 0 && (
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                      הודעות ב-{bufferedGroups} קבוצות
+                  {historyLoaded ? (
+                    <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                      ✓ היסטוריה נטענה · {bufferedGroups} קבוצות · {Object.values(storeSummary).reduce((a, b) => a + b, 0)} הודעות
+                    </span>
+                  ) : (
+                    <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full animate-pulse">
+                      ממתין לסנכרון היסטוריה...
                     </span>
                   )}
                 </>
@@ -350,7 +360,10 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
                       onChange={() => toggleGroup(g.id)}
                       className="h-3.5 w-3.5 shrink-0"
                     />
-                    <span className="text-sm truncate">{g.name}</span>
+                    <span className="text-sm truncate flex-1">{g.name}</span>
+                    {storeSummary[g.name] !== undefined && (
+                      <span className="text-xs text-muted-foreground/60 shrink-0">{storeSummary[g.name]} הודעות</span>
+                    )}
                   </label>
                 ))}
               </div>

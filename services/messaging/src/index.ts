@@ -58,7 +58,6 @@ app.post('/whatsapp/scan', async (req, res) => {
       const msgs = fetchGroupMessages([gid], 25)
       if (msgs.length === 0) continue
       totalScanned += msgs.length
-      console.log(`[scan] group ${gid}: ${msgs.length} msgs`)
       const jobs = await parseJobMessages(msgs, userProfile)
       allJobs.push(...jobs)
     }

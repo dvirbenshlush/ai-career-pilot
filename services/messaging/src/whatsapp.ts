@@ -18,18 +18,19 @@ const AUTH_DIR = path.join(__dirname, '..', 'auth_info', 'whatsapp')
 const logger = pino({ level: 'silent' })
 
 // ── Message store ─────────────────────────────────────────────────────────────
-// groupId → Array<{ text, timestamp }>
-// Keeps up to 500 messages per group; oldest dropped first
 const MAX_PER_GROUP = 500
 
-interface StoredMsg { text: string; timestamp: number }
+interface StoredMsg { text: string; timestamp: number; senderName: string }
 const msgStore = new Map<string, StoredMsg[]>()
 
-function storeMsg(jid: string, text: string, ts: number) {
-  if (!text.trim()) return
+function storeMsg(jid: string, text: string, ts: number, senderName: string) {
+  const t = text.trim()
+  if (!t || !ts) return
   if (!msgStore.has(jid)) msgStore.set(jid, [])
   const arr = msgStore.get(jid)!
-  arr.push({ text, timestamp: ts })
+  // Deduplicate — same message arriving from two syncs
+  if (arr.some(m => m.timestamp === ts && m.text === t)) return
+  arr.push({ text: t, timestamp: ts, senderName })
   if (arr.length > MAX_PER_GROUP) arr.splice(0, arr.length - MAX_PER_GROUP)
 }
 
@@ -39,9 +40,9 @@ function extractText(msg: WAMessage): string {
   return (
     m.conversation ??
     m.extendedTextMessage?.text ??
-    m.imageMessage?.caption ??       // תמונות עם כיתוב — נפוץ מאוד במשרות
-    m.videoMessage?.caption ??       // סרטונים עם כיתוב
-    m.documentMessage?.caption ??   // מסמכים עם כיתוב
+    m.imageMessage?.caption ??
+    m.videoMessage?.caption ??
+    m.documentMessage?.caption ??
     m.buttonsResponseMessage?.selectedDisplayText ??
     m.listResponseMessage?.title ??
     ''
@@ -55,7 +56,8 @@ function ingest(messages: WAMessage[]) {
     if (!jid.endsWith('@g.us')) continue
     const text = extractText(msg)
     const ts = Number(msg.messageTimestamp ?? 0)
-    if (text && ts) { storeMsg(jid, text, ts); count++ }
+    const senderName = (msg as { pushName?: string }).pushName ?? ''
+    if (text && ts) { storeMsg(jid, text, ts, senderName); count++ }
   }
   return count
 }
@@ -68,20 +70,33 @@ interface WAState {
   qrBase64: string | null
   sock: WASocket | null
   groups: Array<{ id: string; name: string }>
+  historyLoaded: boolean   // true once messaging-history.set has fired
 }
 
-const state: WAState = { status: 'disconnected', qrBase64: null, sock: null, groups: [] }
+const state: WAState = {
+  status: 'disconnected',
+  qrBase64: null,
+  sock: null,
+  groups: [],
+  historyLoaded: false,
+}
 
-// Prevents auto-reconnect when we're intentionally resetting
 let intentionalDisconnect = false
 
 // ── Public API ────────────────────────────────────────────────────────────────
 export function getWAState() {
+  const storeSummary: Record<string, number> = {}
+  for (const [jid, msgs] of msgStore.entries()) {
+    const name = state.groups.find(g => g.id === jid)?.name ?? jid
+    storeSummary[name] = msgs.length
+  }
   return {
     status: state.status,
     qrBase64: state.qrBase64,
     groups: state.groups,
-    bufferedGroups: Array.from(msgStore.keys()).filter(j => j.endsWith('@g.us')).length,
+    bufferedGroups: msgStore.size,
+    historyLoaded: state.historyLoaded,
+    storeSummary,   // shows message count per group for debugging
   }
 }
 
@@ -90,6 +105,7 @@ export async function connectWhatsApp(): Promise<void> {
 
   state.status = 'connecting'
   state.qrBase64 = null
+  state.historyLoaded = false
 
   const { state: authState, saveCreds } = await useMultiFileAuthState(AUTH_DIR)
   const { version } = await fetchLatestBaileysVersion()
@@ -125,10 +141,8 @@ export async function connectWhatsApp(): Promise<void> {
       state.status = 'disconnected'
       state.sock = null
       state.groups = []
-      if (intentionalDisconnect) {
-        // reset/logout in progress — caller handles what happens next
-        return
-      }
+      state.historyLoaded = false
+      if (intentionalDisconnect) return
       if (loggedOut) {
         await rm(AUTH_DIR, { recursive: true, force: true })
         console.log('[WA] Session cleared (logged out from phone)')
@@ -145,10 +159,12 @@ export async function connectWhatsApp(): Promise<void> {
     }
   })
 
-  // History sync — fires on first connect and after long offline periods
+  // History sync — accumulate across syncs, never clear between them
   sock.ev.on('messaging-history.set', ({ messages, isLatest }) => {
     const saved = ingest(messages as WAMessage[])
-    console.log(`[WA] History sync: ${messages.length} msgs, ${saved} group msgs stored (isLatest=${isLatest})`)
+    state.historyLoaded = true
+    const total = Array.from(msgStore.values()).reduce((s, a) => s + a.length, 0)
+    console.log(`[WA] History sync: ${messages.length} msgs received, ${saved} new group msgs added, ${total} total stored (isLatest=${isLatest})`)
   })
 
   // Real-time new messages
@@ -163,7 +179,7 @@ async function refreshGroups() {
   try {
     const groups = await state.sock.groupFetchAllParticipating()
     state.groups = Object.values(groups).map(g => ({ id: g.id, name: g.subject ?? g.id }))
-    console.log(`[WA] ${state.groups.length} groups`)
+    console.log(`[WA] ${state.groups.length} groups loaded`)
   } catch (e) {
     console.error('[WA] groupFetchAllParticipating error:', e)
     state.groups = []
@@ -174,6 +190,7 @@ export interface RawMessage {
   text: string
   source: 'whatsapp'
   source_name: string
+  sender_name: string
   timestamp: number
 }
 
@@ -185,14 +202,14 @@ export function fetchGroupMessages(groupIds: string[], limit = 25): RawMessage[]
   for (const gid of groupIds) {
     const name = state.groups.find(g => g.id === gid)?.name ?? gid
     const all = msgStore.get(gid) ?? []
-    // Take the last `limit` messages regardless of age or read status
     const recent = all.slice(-limit)
-    for (const { text, timestamp } of recent) {
-      out.push({ text, source: 'whatsapp', source_name: name, timestamp })
+    console.log(`[WA] group "${name}": ${all.length} stored, returning last ${recent.length}`)
+    for (const { text, timestamp, senderName } of recent) {
+      out.push({ text, source: 'whatsapp', source_name: name, sender_name: senderName, timestamp })
     }
   }
 
-  console.log(`[WA] scan: ${out.length} msgs (last ${limit}/group) from ${groupIds.length} groups`)
+  console.log(`[WA] scan total: ${out.length} msgs from ${groupIds.length} groups`)
   return out
 }
 
@@ -202,22 +219,24 @@ export function disconnectWhatsApp() {
   state.status = 'disconnected'
   state.sock = null
   state.groups = []
+  state.historyLoaded = false
   intentionalDisconnect = false
 }
 
-// Wipes saved auth → next connectWhatsApp() shows fresh QR + full history sync
+// Wipes auth so next connect shows fresh QR + triggers history sync.
+// Does NOT clear msgStore — accumulated messages are kept and deduped on next sync.
 export async function resetSession() {
   intentionalDisconnect = true
   try { state.sock?.end(undefined) } catch { /* ignore */ }
   state.sock = null
   state.status = 'disconnected'
   state.groups = []
+  state.historyLoaded = false
 
-  // Give the socket time to close cleanly before deleting auth files
   await new Promise(r => setTimeout(r, 1500))
 
-  msgStore.clear()
+  // Keep msgStore — new history sync will ADD to it (deduped by timestamp+text)
   await rm(AUTH_DIR, { recursive: true, force: true })
   intentionalDisconnect = false
-  console.log('[WA] Session reset — next connect will show QR and do full history sync')
+  console.log(`[WA] Session reset — msgStore kept (${msgStore.size} groups). Next QR will trigger fresh history sync.`)
 }

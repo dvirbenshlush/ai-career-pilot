@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import {
   Loader2, ExternalLink, MapPin, DollarSign, Wifi, Sparkles,
   Trash2, Search, RefreshCw, Building2, ChevronDown, ChevronUp,
-  Briefcase, Mail, Phone, Send,
+  Briefcase, Mail, Phone, Send, User,
 } from 'lucide-react'
 
 interface SavedJob {
@@ -28,6 +28,7 @@ interface SavedJob {
   experience_required: string | null
   contact: string | null
   raw_message: string | null
+  poster_name: string | null
   found_at: string
 }
 
@@ -193,6 +194,13 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
               {job.salary_range && <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{job.salary_range}</span>}
               <span className="text-muted-foreground/50">{date}</span>
             </div>
+
+            {/* Poster */}
+            {job.poster_name && (
+              <p className="text-xs text-muted-foreground/70 mt-1 flex items-center gap-1">
+                <User className="h-3 w-3 shrink-0" /> פורסם על ידי {job.poster_name}
+              </p>
+            )}
 
             {/* AI summary */}
             {job.snippet && (
