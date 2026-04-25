@@ -119,10 +119,11 @@ let intentionalDisconnect = false
 
 // ── Public API ────────────────────────────────────────────────────────────────
 export function getWAState() {
+  const cutoffSec = Math.floor(Date.now() / 1000) - 3 * 24 * 3600
   const storeSummary: Record<string, number> = {}
   for (const [jid, msgs] of msgStore.entries()) {
     const name = state.groups.find(g => g.id === jid)?.name ?? jid
-    storeSummary[name] = msgs.length
+    storeSummary[name] = msgs.filter(m => m.timestamp >= cutoffSec).length
   }
   return {
     status: state.status,
@@ -240,16 +241,18 @@ export function fetchGroupName(gid: string): string | null {
   return state.groups.find(g => g.id === gid)?.name ?? null
 }
 
-export function fetchGroupMessages(groupIds: string[], limit = 100): RawMessage[] {
+export function fetchGroupMessages(groupIds: string[], maxAgeDays = 3): RawMessage[] {
   if (state.status !== 'connected') throw new Error('WhatsApp not connected')
 
+  // WA messageTimestamp is Unix seconds
+  const cutoffSec = Math.floor(Date.now() / 1000) - maxAgeDays * 24 * 3600
   const out: RawMessage[] = []
 
   for (const gid of groupIds) {
     const name = state.groups.find(g => g.id === gid)?.name ?? gid
     const all = msgStore.get(gid) ?? []
-    const recent = all.slice(-limit)
-    console.log(`[WA] group "${name}": ${all.length} stored, returning last ${recent.length}`)
+    const recent = all.filter(m => m.timestamp >= cutoffSec)
+    console.log(`[WA] group "${name}": ${all.length} stored, ${recent.length} in last ${maxAgeDays}d`)
     for (const { text, timestamp, senderName } of recent) {
       out.push({ text, source: 'whatsapp', source_name: name, sender_name: senderName, timestamp })
     }

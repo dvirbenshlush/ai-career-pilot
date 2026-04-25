@@ -53,12 +53,11 @@ app.post('/whatsapp/scan', async (req, res) => {
     const allJobs = []
     let totalScanned = 0
 
-    // Process each group independently — all stored messages, capped at 100
+    // Process each group independently — last 3 days of stored messages
     const scannedGroupNames: string[] = []
     for (const gid of groupIds) {
-      const msgs = fetchGroupMessages([gid], 100)
+      const msgs = fetchGroupMessages([gid]) // default: last 3 days
       if (msgs.length === 0) {
-        // Still track name so stale DB entries get cleared
         const name = fetchGroupName(gid)
         if (name) scannedGroupNames.push(name)
         continue

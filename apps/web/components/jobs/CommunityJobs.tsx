@@ -373,8 +373,8 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
                     />
                     <span className="text-sm truncate flex-1">{g.name}</span>
                     {storeSummary[g.name] !== undefined && (
-                      <span className="text-xs text-muted-foreground/60 shrink-0" title="הודעות טקסט שנשמרו מהקבוצה">
-                        {storeSummary[g.name]} טקסטים
+                      <span className="text-xs text-muted-foreground/60 shrink-0" title="הודעות טקסט מ-3 הימים האחרונים">
+                        {storeSummary[g.name]} ב-3 ימים
                       </span>
                     )}
                   </label>
