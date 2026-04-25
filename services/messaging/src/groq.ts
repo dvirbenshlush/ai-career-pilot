@@ -32,11 +32,9 @@ function isUrlOnly(text: string): boolean {
   return /^https?:\/\/\S+$/.test(text.trim())
 }
 
-function isValidJob(j: ParsedJob): boolean {
-  const title = j.title?.trim().toLowerCase()
-  if (!title || title === 'unknown' || title === 'לא ידוע') return false
-  // Must have at least a snippet or experience info — pure-URL ghost jobs have neither
-  return !!(j.snippet && j.snippet !== 'No snippet available.' && j.snippet.length > 10)
+function hasTitle(j: ParsedJob): boolean {
+  const t = j.title?.trim().toLowerCase()
+  return !!t && t !== 'unknown' && t !== 'לא ידוע' && t !== 'n/a'
 }
 
 async function parseBatch(
@@ -59,30 +57,30 @@ async function parseBatch(
       },
       {
         role: 'user',
-        content: `You are analyzing WhatsApp/Telegram messages to find job postings. Be INCLUSIVE — if a message looks even remotely like a job posting, extract it.
+        content: `You are analyzing WhatsApp/Telegram job-group messages. These groups are DEDICATED to job postings — treat almost every message as a potential job. Extract ALL of them.
 ${profileContext}
 
 MESSAGES:
 ${batch}
 
-For each message that could be a job posting, extract ALL available details:
-- title: concise job title (infer from context if not explicit, e.g. "מפתח Full Stack")
-- company: company name if mentioned (or "")
-- location: city/region or "Remote" or "היברידי" (or "")
-- salary_range: any salary/rate mentioned — hourly, monthly, annual (or "")
-- remote: true if remote or hybrid is mentioned anywhere
-- url: any URL in the message for applying or more info (or "")
-- tags: up to 8 skill/tech/role tags pulled from the message (e.g. ["React","Node.js","TypeScript","Senior"])
-- snippet: 3-4 sentence summary of the full role — include scope, stack, team, responsibilities
-- experience_required: COPY verbatim all experience/requirement lines from the message (or "")
-- contact: the EXACT email address, phone number, or WhatsApp link to apply — copy it exactly as it appears (or "")
-- poster_name: name of the person who posted (from SENDER field, or "")
+For EVERY message extract:
+- title: job title — infer from context if needed (e.g. "מפתח Full Stack", "בדיקות QA", "מנהל מוצר"). NEVER return "Unknown".
+- company: company name or ""
+- location: city/region/Remote/היברידי or ""
+- salary_range: any salary mentioned or ""
+- remote: true if remote/hybrid mentioned
+- url: any application URL or ""
+- tags: up to 8 skill/tech/role tags
+- snippet: 2-3 sentence summary of the role
+- experience_required: copy verbatim requirement lines or ""
+- contact: exact email/phone/WhatsApp link or ""
+- poster_name: from SENDER field or ""
 - source: "whatsapp" or "telegram"
-- source_name: group/channel name from GROUP field
+- source_name: from GROUP field
 - match_score: 0-100
-- raw_message: the message index as a string (e.g. "0", "1", "2")
+- raw_message: message index as string ("0","1","2"...)
 
-Be generous — include borderline cases. Skip ONLY clearly non-job messages (news, spam, personal chit-chat, memes).
+Skip ONLY: messages with zero job content (pure social chat with no role/skill/hiring mention).
 Return JSON: { "jobs": [ {...}, ... ] }`,
       },
     ],
@@ -93,14 +91,18 @@ Return JSON: { "jobs": [ {...}, ... ] }`,
   try {
     const parsed = JSON.parse(jsonrepair(raw))
     const jobs = (parsed.jobs ?? []) as ParsedJob[]
-    return jobs
+    console.log(`[Groq] raw response: ${jobs.length} jobs — titles: ${jobs.map(j => j.title).join(' | ')}`)
+    const result = jobs
       .map(j => {
         const idx = parseInt(j.raw_message, 10)
         const original = !isNaN(idx) && messages[idx] ? messages[idx].text : j.raw_message
         return { ...j, raw_message: original }
       })
-      .filter(isValidJob)
-  } catch {
+      .filter(hasTitle)
+    console.log(`[Groq] after title filter: ${result.length} jobs kept`)
+    return result
+  } catch (e) {
+    console.error('[Groq] parse error:', e, 'raw:', raw.slice(0, 300))
     return []
   }
 }

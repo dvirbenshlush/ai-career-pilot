@@ -89,8 +89,7 @@ export async function POST(req: NextRequest) {
 
       const validJobs = (data.jobs as Job[]).filter(j => {
         const t = j.title?.trim().toLowerCase()
-        return t && t !== 'unknown' && t !== 'לא ידוע'
-          && j.snippet && j.snippet !== 'No snippet available.'
+        return !!t && t !== 'unknown' && t !== 'לא ידוע' && t !== 'n/a'
       })
 
       if (validJobs.length > 0) {
