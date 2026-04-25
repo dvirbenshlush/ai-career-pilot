@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { groqChat } from '@/lib/ai/groq'
+import { anonymize } from '@/lib/pii'
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
 
@@ -162,7 +163,7 @@ ${snippet ? `DESCRIPTION: ${snippet}` : ''}
 ${experienceRequired ? `REQUIREMENTS: ${experienceRequired}` : ''}
 
 CANDIDATE PROFILE (from resume):
-${(resume.parsed_text ?? '').slice(0, 1500)}
+${anonymize((resume.parsed_text ?? '').slice(0, 1500)).text}
 
 Rules:
 - Write in Hebrew

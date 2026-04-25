@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk'
 import { jsonrepair } from 'jsonrepair'
+import { anonymize } from './pii.js'
 
 let _groq: Groq | null = null
 function getGroq() {
@@ -112,7 +113,7 @@ export async function parseJobMessages(
   console.log(`[Groq] parseJobMessages called with ${messages.length} messages`)
 
   const profileContext = userProfile
-    ? `USER PROFILE: ${userProfile}\nScore each job 0-100 based on how well it matches this profile.`
+    ? `USER PROFILE: ${anonymize(userProfile)}\nScore each job 0-100 based on how well it matches this profile.`
     : 'Set match_score to 50 for all jobs (no profile provided).'
 
   const results: ParsedJob[] = []

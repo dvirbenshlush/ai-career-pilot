@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { groqChat } from '@/lib/ai/groq'
 import { jsonrepair } from 'jsonrepair'
+import { anonymize, reinject, cleanupTokens } from '@/lib/pii'
 
 // Step 1: Extract everything from the raw resume text into clean structured JSON
 const EXTRACT_RESUME_PROMPT = (resumeText: string) => `
@@ -308,18 +309,23 @@ async function handlePost(request: NextRequest) {
   const truncatedResumeText = resumeText.slice(0, 3000)
 
   // Replace Hebrew gershayim written as ASCII " so the model doesn't break JSON
-  // e.g. בע"מ → בע״מ, סמנכ"ל → סמנכ״ל
   const safeResumeText = truncatedResumeText.replace(/(\w)"(\w)/g, '$1״$2')
 
-  const jsonSystem = 'You are a JSON API. Respond with valid JSON only — no markdown, no code fences. CRITICAL: never use double-quote characters (") inside string values. For Hebrew abbreviations like בע"מ write בע״מ using the Unicode gershayim character ״ (U+05F4) instead.'
+  // ── PII tokenization — strip direct identifiers before sending to Groq ──────
+  const { text: anonResumeText, map: piiMap } = anonymize(safeResumeText)
+  const piiNote = Object.keys(piiMap).length > 0
+    ? ' Some values appear as {{PII_*}} tokens — copy them verbatim into your output without modification.'
+    : ''
 
-  // Step 1: Extract structured data from raw resume text
+  const jsonSystem = `You are a JSON API. Respond with valid JSON only — no markdown, no code fences. CRITICAL: never use double-quote characters (") inside string values. For Hebrew abbreviations like בע"מ write בע״מ using the Unicode gershayim character ״ (U+05F4) instead.${piiNote}`
+
+  // Step 1: Extract structured data from anonymized resume text
   let structuredCV: string
   try {
     const extractResult = await groqChat({
       messages: [
         { role: 'system', content: jsonSystem },
-        { role: 'user', content: EXTRACT_RESUME_PROMPT(safeResumeText) },
+        { role: 'user', content: EXTRACT_RESUME_PROMPT(anonResumeText) },
       ],
       max_tokens: 3000,
     })
@@ -330,7 +336,7 @@ async function handlePost(request: NextRequest) {
     return NextResponse.json({ error: 'Resume extraction failed: ' + msg }, { status: 500 })
   }
 
-  // Step 2: Tailor the structured CV to the job
+  // Step 2: Tailor the structured CV to the job (still anonymized)
   let cvData: Record<string, unknown>
   try {
     const tailorResult = await groqChat({
@@ -340,7 +346,13 @@ async function handlePost(request: NextRequest) {
       ],
       max_tokens: 2500,
     })
-    cvData = JSON.parse(jsonrepair(tailorResult.choices[0]?.message?.content ?? '{}'))
+    // Reinject PII tokens with real values, then strip any leftover tokens the model dropped
+    cvData = cleanupTokens(
+      reinject(
+        JSON.parse(jsonrepair(tailorResult.choices[0]?.message?.content ?? '{}')),
+        piiMap
+      )
+    ) as Record<string, unknown>
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'CV tailoring failed: ' + msg }, { status: 500 })

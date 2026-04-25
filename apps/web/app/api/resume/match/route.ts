@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { groqChat } from '@/lib/ai/groq'
 import { RESUME_MATCH_PROMPT } from '@/lib/ai/prompts'
 import { jsonrepair } from 'jsonrepair'
+import { anonymize } from '@/lib/pii'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -45,6 +46,9 @@ export async function POST(request: NextRequest) {
 
   if (jobError) return NextResponse.json({ error: 'Failed to save job: ' + jobError.message }, { status: 500 })
 
+  // Anonymize resume before sending to Groq — PII is irrelevant for keyword matching
+  const { text: anonResume } = anonymize(resume.parsed_text)
+
   // Run AI match analysis
   let responseText = ''
   try {
@@ -54,7 +58,7 @@ export async function POST(request: NextRequest) {
           role: 'system',
           content: 'You are a JSON API. Respond with valid JSON only — no markdown, no code fences, no explanation. Every array value must be a quoted string.',
         },
-        { role: 'user', content: RESUME_MATCH_PROMPT(resume.parsed_text, jobDescription) },
+        { role: 'user', content: RESUME_MATCH_PROMPT(anonResume, jobDescription) },
       ],
       max_tokens: 2048,
     })
