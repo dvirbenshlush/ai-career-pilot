@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import {
   Loader2, ExternalLink, MapPin, DollarSign, Wifi, Sparkles,
   Trash2, Search, RefreshCw, Building2, ChevronDown, ChevronUp,
-  Briefcase, Mail, Phone,
+  Briefcase, Mail, Phone, Send,
 } from 'lucide-react'
 
 interface SavedJob {
@@ -105,6 +105,46 @@ function ContactChip({ contact }: { contact: string }) {
 function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string) => void }) {
   const [deleting, setDeleting] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+
+  const contactEmail = job.contact?.includes('@') ? job.contact.trim() : null
+
+  const handleSendCv = async () => {
+    if (!contactEmail) return
+    setSending(true)
+    setSendError(null)
+    try {
+      const res = await fetch('/api/jobs/send-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobTitle: job.title,
+          company: job.company,
+          contactEmail,
+          snippet: job.snippet,
+          experienceRequired: job.experience_required,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json() as { error?: string }
+        setSendError(data.error ?? 'שגיאה בהכנת המייל')
+        return
+      }
+      // Trigger .eml download
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `apply-${job.company || 'job'}.eml`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setSendError('שגיאת רשת — נסה שוב')
+    } finally {
+      setSending(false)
+    }
+  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -218,6 +258,24 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
               </a>
             ) : (
               <span className="text-xs text-muted-foreground/50 italic">אין קישור</span>
+            )}
+            {contactEmail && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="whitespace-nowrap text-green-700 border-green-300 hover:bg-green-50"
+                onClick={handleSendCv}
+                disabled={sending}
+                title={`שלח קו"ח ל-${contactEmail}`}
+              >
+                {sending
+                  ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> מכין מייל...</>
+                  : <><Send className="h-3.5 w-3.5 mr-1" /> שלח קו&quot;ח</>
+                }
+              </Button>
+            )}
+            {sendError && (
+              <p className="text-xs text-destructive text-right max-w-[140px]">{sendError}</p>
             )}
             <button
               onClick={handleDelete}
