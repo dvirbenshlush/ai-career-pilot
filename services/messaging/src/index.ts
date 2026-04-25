@@ -98,8 +98,11 @@ app.post('/telegram/scan', async (req, res) => {
   }
 
   try {
-    const msgs = await fetchChannelMessages(botToken, channels)
-    const jobs = await parseJobMessages(msgs, userProfile)
+    const msgs = await fetchChannelMessages(botToken, channels) // default 3 days
+    const jobs = await parseJobMessages(
+      msgs.map(m => ({ ...m, sender_name: m.sender_name ?? '' })),
+      userProfile
+    )
     return res.json({ jobs, messagesScanned: msgs.length })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
