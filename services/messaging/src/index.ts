@@ -2,7 +2,8 @@ import express from 'express'
 import cors from 'cors'
 import { connectWhatsApp, fetchGroupMessages, fetchGroupName, getWAState, disconnectWhatsApp, resetSession } from './whatsapp.js'
 import { fetchChannelMessages, validateBotToken } from './telegram.js'
-import { parseJobMessages } from './groq.js'
+import { parseJobMessages, parseJobPage } from './groq.js'
+import { scrapePage } from './scraper.js'
 
 const app = express()
 app.use(cors())
@@ -121,6 +122,33 @@ app.post('/telegram/scan', async (req, res) => {
     const msg = err instanceof Error ? err.message : String(err)
     return res.status(500).json({ error: msg })
   }
+})
+
+// ── URL scraper ───────────────────────────────────────────────────────────────
+
+app.post('/url/scan', async (req, res) => {
+  const { urls, userProfile } = req.body as { urls: string[]; userProfile?: string }
+
+  if (!Array.isArray(urls) || urls.length === 0) {
+    return res.status(400).json({ error: 'urls required' })
+  }
+
+  const jobs = []
+  const errors: string[] = []
+
+  for (const url of urls.slice(0, 5)) { // cap at 5 URLs per request
+    try {
+      const page = await scrapePage(url)
+      const pageJobs = await parseJobPage(page.url, page.text, page.title, userProfile)
+      jobs.push(...pageJobs)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`[URL] failed to scrape ${url}:`, msg)
+      errors.push(`${url}: ${msg}`)
+    }
+  }
+
+  return res.json({ jobs, errors })
 })
 
 // ── Health ────────────────────────────────────────────────────────────────────

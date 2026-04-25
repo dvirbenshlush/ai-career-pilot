@@ -20,7 +20,7 @@ export interface ParsedJob {
   experience_required: string
   contact: string           // email / phone / link for applying
   poster_name: string       // name of person who posted in the group
-  source: 'whatsapp' | 'telegram'
+  source: 'whatsapp' | 'telegram' | 'url'
   source_name: string
   match_score: number
   raw_message: string
@@ -32,6 +32,16 @@ const CHUNK_SIZE = 4                    // 4 msgs × 200 chars ≈ ~1500 input t
 function hasTitle(j: ParsedJob): boolean {
   const t = j.title?.trim().toLowerCase()
   return !!t && t !== 'unknown' && t !== 'לא ידוע' && t !== 'n/a'
+}
+
+const EMAIL_RE = /[\w.+\-]+@[\w\-]+(?:\.[a-zA-Z]{2,})+/g
+
+function fillMissingContact(j: ParsedJob): ParsedJob {
+  if (j.contact?.trim()) return j
+  const text = j.raw_message || j.snippet || ''
+  const match = text.match(EMAIL_RE)
+  if (match) return { ...j, contact: match[0] }
+  return j
 }
 
 async function parseBatch(
@@ -96,10 +106,74 @@ Return JSON: { "jobs": [ {...}, ... ] }`,
         return { ...j, raw_message: original }
       })
       .filter(hasTitle)
+      .map(fillMissingContact)
     console.log(`[Groq] after title filter: ${result.length} jobs kept`)
     return result
   } catch (e) {
     console.error('[Groq] parse error:', e, 'raw:', raw.slice(0, 300))
+    return []
+  }
+}
+
+export async function parseJobPage(
+  url: string,
+  pageText: string,
+  pageTitle: string,
+  userProfile?: string
+): Promise<ParsedJob[]> {
+  const profileContext = userProfile
+    ? `USER PROFILE: ${anonymize(userProfile)}\nScore each job 0-100 based on how well it matches this profile.`
+    : 'Set match_score to 50 for all jobs (no profile provided).'
+
+  const completion = await getGroq().chat.completions.create({
+    model: MODEL,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a JSON API. Respond with valid JSON only — no markdown, no explanation.',
+      },
+      {
+        role: 'user',
+        content: `Extract all job postings from this webpage.
+${profileContext}
+
+PAGE URL: ${url}
+PAGE TITLE: ${pageTitle}
+PAGE CONTENT:
+${pageText.slice(0, 5000)}
+
+For EVERY job posting found extract:
+- title: job title
+- company: company name or ""
+- location: city/region/Remote or ""
+- salary_range: any salary mentioned or ""
+- remote: true if remote/hybrid mentioned
+- url: direct application link or the page URL
+- tags: up to 8 skill/tech/role tags
+- snippet: 2-3 sentence summary
+- experience_required: requirements verbatim or ""
+- contact: email/phone/link for applying or ""
+- match_score: 0-100
+- raw_message: the relevant text excerpt from the page
+
+Return JSON: { "jobs": [...] }
+If no jobs found, return { "jobs": [] }`,
+      },
+    ],
+    max_tokens: 2000,
+  })
+
+  const raw = completion.choices[0]?.message?.content ?? ''
+  try {
+    const parsed = JSON.parse(jsonrepair(raw))
+    const jobs = ((parsed.jobs ?? []) as ParsedJob[])
+      .map(j => ({ ...j, source: 'url' as const, source_name: url }))
+      .filter(hasTitle)
+      .map(fillMissingContact)
+    console.log(`[Groq] parseJobPage ${url}: ${jobs.length} jobs found`)
+    return jobs
+  } catch (e) {
+    console.error('[Groq] parseJobPage error:', e, 'raw:', raw.slice(0, 200))
     return []
   }
 }

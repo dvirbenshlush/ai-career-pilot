@@ -281,83 +281,132 @@ export function JobsPageClient({ savedJobs, resumeId, linkedinProfile }: { saved
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="saved">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="saved" className="flex items-center gap-1.5 text-xs">
-            <Bookmark className="h-3.5 w-3.5" /> כל המשרות
+      <Tabs defaultValue="saved" className="flex-col">
+        <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-10 gap-0">
+          <TabsTrigger
+            value="saved"
+            className="flex items-center gap-1.5 px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
+          >
+            <Bookmark className="h-3.5 w-3.5" /> המשרות שלי
           </TabsTrigger>
-          <TabsTrigger value="linkedin" className="flex items-center gap-1.5 text-xs">
-            <LinkedInIcon className="h-3.5 w-3.5" /> LinkedIn
+          <TabsTrigger
+            value="scrape"
+            className="flex items-center gap-1.5 px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
+          >
+            <MessageCircle className="h-3.5 w-3.5" /> גירוד משרות
           </TabsTrigger>
-          <TabsTrigger value="manual" className="flex items-center gap-1.5 text-xs">
-            <Search className="h-3.5 w-3.5" /> חיפוש
-          </TabsTrigger>
-          <TabsTrigger value="community" className="flex items-center gap-1.5 text-xs">
-            <MessageCircle className="h-3.5 w-3.5" /> קהילה
+          <TabsTrigger
+            value="search"
+            className="flex items-center gap-1.5 px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
+          >
+            <Search className="h-3.5 w-3.5" /> חיפוש AI
           </TabsTrigger>
         </TabsList>
 
-        {/* Saved jobs tab */}
+        {/* ── My Jobs ── */}
         <TabsContent value="saved" className="mt-4">
           <SavedJobsTab />
         </TabsContent>
 
-        {/* LinkedIn tab */}
-        <TabsContent value="linkedin" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <LinkedInIcon className="h-5 w-5 text-blue-600" />
-                Match Jobs to Your LinkedIn Profile
-              </CardTitle>
-              <CardDescription>
-                Paste your LinkedIn profile URL — we scrape it, analyze your experience, and find 10 matching jobs from LinkedIn
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleLinkedinMatch} className="space-y-5">
-                <div className="space-y-2">
-                  <Label>Paste Your LinkedIn Profile Text *</Label>
-                  <textarea
-                    className="w-full min-h-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
-                    placeholder="1. Open your LinkedIn profile in a browser&#10;2. Select all text (Ctrl+A) and copy (Ctrl+C)&#10;3. Paste it here (Ctrl+V)"
-                    value={profileText}
-                    onChange={e => setProfileText(e.target.value)}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    LinkedIn blocks automated access — paste your profile text manually. Go to your profile → select all → copy → paste here.
-                  </p>
-                </div>
+        {/* ── Scraping: WhatsApp / Telegram / Web URL ── */}
+        <TabsContent value="scrape" className="mt-4">
+          <CommunityJobs userProfile={linkedinProfile} />
+        </TabsContent>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Location preference</Label>
-                    <Input placeholder="e.g. Tel Aviv, London, NYC" value={liLocation} onChange={e => setLiLocation(e.target.value)} />
+        {/* ── AI Search: LinkedIn + Manual ── */}
+        <TabsContent value="search" className="space-y-6 mt-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+
+            {/* LinkedIn */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LinkedInIcon className="h-5 w-5 text-blue-600" />
+                  LinkedIn Profile Match
+                </CardTitle>
+                <CardDescription>הדבק את טקסט הפרופיל שלך — AI ימצא 10 משרות מתאימות</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleLinkedinMatch} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">LinkedIn Profile Text *</Label>
+                    <textarea
+                      className="w-full min-h-[140px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
+                      placeholder={"1. פתח את פרופיל LinkedIn\n2. Ctrl+A → Ctrl+C\n3. הדבק כאן"}
+                      value={profileText}
+                      onChange={e => setProfileText(e.target.value)}
+                      required
+                    />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Minimum salary</Label>
-                    <Input placeholder="e.g. $80,000 or ₪25,000/month" value={salary} onChange={e => setSalary(e.target.value)} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">מיקום</Label>
+                      <Input placeholder="תל אביב, NYC..." value={liLocation} onChange={e => setLiLocation(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">שכר מינימלי</Label>
+                      <Input placeholder="₪25,000 / $80,000" value={salary} onChange={e => setSalary(e.target.value)} />
+                    </div>
                   </div>
-                </div>
+                  <FilterRow label="סוג משרה" options={JOB_TYPES} value={jobType} onChange={setJobType} />
+                  <FilterRow label="אופן עבודה" options={WORK_MODES} value={workMode} onChange={setWorkMode} />
+                  <FilterRow label="רמת ניסיון" options={EXP_LEVELS} value={expLevel} onChange={setExpLevel} />
+                  {liError && <p className="text-sm text-destructive">{liError}</p>}
+                  <Button type="submit" disabled={liLoading} className="w-full">
+                    {liLoading
+                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> מנתח פרופיל...</>
+                      : <><Sparkles className="mr-2 h-4 w-4" /> מצא משרות מתאימות</>
+                    }
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
 
-                <FilterRow label="Job Type" options={JOB_TYPES} value={jobType} onChange={setJobType} />
-                <FilterRow label="Work Mode" options={WORK_MODES} value={workMode} onChange={setWorkMode} />
-                <FilterRow label="Experience Level" options={EXP_LEVELS} value={expLevel} onChange={setExpLevel} />
+            {/* Manual Search */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Search className="h-5 w-5" />חיפוש ידני</CardTitle>
+                <CardDescription>הגדר פרמטרים ו-AI יחפש ויסנן משרות</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSearch} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">תפקיד *</Label>
+                      <Input placeholder="מפתח, מנהל מוצר, רואה חשבון..." value={role} onChange={e => setRole(e.target.value)} required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">כישורים / Stack</Label>
+                      <Input placeholder="React, Python, Excel..." value={skills} onChange={e => setSkills(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">מיקום</Label>
+                      <Input placeholder="תל אביב, ירושלים..." value={searchLocation} onChange={e => setSearchLocation(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">שכר מינימלי</Label>
+                      <Input placeholder="₪30,000 / $120,000" value={salaryMin} onChange={e => setSalaryMin(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="remote" checked={remote} onChange={e => setRemote(e.target.checked)} className="h-4 w-4 rounded" />
+                    <Label htmlFor="remote" className="cursor-pointer text-sm">Remote / Hybrid preferred</Label>
+                  </div>
+                  {searchError && <p className="text-sm text-destructive">{searchError}</p>}
+                  <Button type="submit" disabled={searchLoading} className="w-full">
+                    {searchLoading
+                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> מחפש משרות...</>
+                      : <><Search className="mr-2 h-4 w-4" /> חפש משרות</>
+                    }
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
 
-                {liError && <p className="text-sm text-destructive">{liError}</p>}
-
-                <Button type="submit" disabled={liLoading} className="w-full">
-                  {liLoading
-                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing profile & searching jobs...</>
-                    : <><Sparkles className="mr-2 h-4 w-4" /> Find My Best Matches</>
-                  }
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          {/* Profile summary card */}
+          {/* LinkedIn profile summary */}
           {profile && (
             <Card className="border-indigo-200 bg-indigo-50/40">
               <CardContent className="pt-4 pb-4">
@@ -376,88 +425,19 @@ export function JobsPageClient({ savedJobs, resumeId, linkedinProfile }: { saved
             </Card>
           )}
 
-          {liResults && (
+          {/* Results */}
+          {(liResults || searchResults) && (
             <div className="space-y-3">
-              <h2 className="text-lg font-semibold">{liResults.length} LinkedIn Jobs Matched to Your Profile</h2>
-              {liResults.length === 0
-                ? <p className="text-muted-foreground text-sm">No matches found. Try adjusting your filters.</p>
-                : liResults.map((job, i) => <JobCard key={i} job={job} resumeId={resumeId} />)
-              }
+              <h2 className="text-lg font-semibold">
+                {liResults ? `${liResults.length} משרות LinkedIn` : `${searchResults!.length} משרות נמצאו`}
+              </h2>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {(liResults ?? searchResults ?? []).map((job, i) => (
+                  <JobCard key={i} job={job} resumeId={resumeId} />
+                ))}
+              </div>
             </div>
           )}
-        </TabsContent>
-
-        {/* Manual search tab */}
-        <TabsContent value="manual" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Search className="h-5 w-5" />Search Parameters</CardTitle>
-              <CardDescription>Define what you&apos;re looking for and the AI agent will find and score matching jobs</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSearch} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Role *</Label>
-                    <Input placeholder="e.g. Product Manager, Accountant, Nurse" value={role} onChange={e => setRole(e.target.value)} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Skills / Stack</Label>
-                    <Input placeholder="e.g. Excel, Python, Sales, Management" value={skills} onChange={e => setSkills(e.target.value)} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Location</Label>
-                    <Input placeholder="e.g. Tel Aviv, NYC" value={searchLocation} onChange={e => setSearchLocation(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Min Salary</Label>
-                    <Input placeholder="e.g. $120,000 or ₪30,000/month" value={salaryMin} onChange={e => setSalaryMin(e.target.value)} />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="remote" checked={remote} onChange={e => setRemote(e.target.checked)} className="h-4 w-4 rounded" />
-                  <Label htmlFor="remote" className="cursor-pointer">Remote / Hybrid preferred</Label>
-                </div>
-                {searchError && <p className="text-sm text-destructive">{searchError}</p>}
-                <Button type="submit" disabled={searchLoading} className="w-full">
-                  {searchLoading
-                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching jobs...</>
-                    : <><Search className="mr-2 h-4 w-4" /> Find Jobs</>
-                  }
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          {searchResults !== null && (
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold">{searchResults.length} jobs found</h2>
-              {searchResults.length === 0
-                ? <p className="text-muted-foreground text-sm">No jobs found. Try broadening your search parameters.</p>
-                : searchResults.map((job, i) => <JobCard key={i} job={job} resumeId={resumeId} />)
-              }
-            </div>
-          )}
-
-          {searchResults === null && savedJobs.length > 0 && (
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold">{savedJobs.length} saved jobs</h2>
-              {savedJobs.map((job, i) => <JobCard key={i} job={job} resumeId={resumeId} />)}
-            </div>
-          )}
-
-          {searchResults === null && savedJobs.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p>Set your search parameters above and click Find Jobs.</p>
-            </div>
-          )}
-        </TabsContent>
-        {/* Community tab */}
-        <TabsContent value="community" className="space-y-4 mt-4">
-          <CommunityJobs userProfile={linkedinProfile} />
         </TabsContent>
       </Tabs>
     </div>

@@ -247,7 +247,13 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
     }
   }
 
-  const contactEmail = job.contact?.includes('@') ? job.contact.trim() : null
+  const extractedEmail = (() => {
+    if (job.contact?.includes('@')) return job.contact.trim()
+    const text = job.raw_message || job.snippet || ''
+    const m = text.match(/[\w.+\-]+@[\w\-]+(?:\.[a-zA-Z]{2,})+/)
+    return m ? m[0] : null
+  })()
+  const contactEmail = extractedEmail
 
   const doSend = async (gender: Gender) => {
     setSending(true)
@@ -662,12 +668,50 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
 // ── Filters ───────────────────────────────────────────────────────────────────
 
 const SOURCES = [
-  { value: 'all', label: 'הכל' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'search', label: 'חיפוש' },
+  { value: 'all',      label: 'כל המקורות' },
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'telegram', label: 'Telegram' },
+  { value: 'url',      label: 'Web URL' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'search',   label: 'חיפוש AI' },
 ]
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all',          label: 'כל הסטטוסים' },
+  { value: 'none',         label: 'ללא סטטוס' },
+  { value: 'applied',      label: 'Applied' },
+  { value: 'interviewing', label: 'Interviewing' },
+  { value: 'offer',        label: 'Offer' },
+  { value: 'rejected',     label: 'Rejected' },
+]
+
+type SortField = 'score' | 'date' | 'title' | 'source'
+type SortDir   = 'asc' | 'desc'
+
+const SORT_FIELDS: { value: SortField; label: string }[] = [
+  { value: 'score',  label: 'התאמה' },
+  { value: 'date',   label: 'תאריך' },
+  { value: 'title',  label: 'כותרת' },
+  { value: 'source', label: 'מקור' },
+]
+
+const SORT_DIR: { value: SortDir; label: string }[] = [
+  { value: 'desc', label: 'מהגבוה לנמוך' },
+  { value: 'asc',  label: 'מהנמוך לגבוה' },
+]
+
+const PAGE_SIZE = 12
+
+function sortJobs(jobs: SavedJob[], field: SortField, dir: SortDir): SavedJob[] {
+  const sign = dir === 'asc' ? 1 : -1
+  return [...jobs].sort((a, b) => {
+    if (field === 'score')  return sign * (a.match_score - b.match_score)
+    if (field === 'date')   return sign * (new Date(a.found_at).getTime() - new Date(b.found_at).getTime())
+    if (field === 'title')  return sign * (a.title ?? '').localeCompare(b.title ?? '', 'he')
+    if (field === 'source') return sign * (a.source ?? '').localeCompare(b.source ?? '')
+    return 0
+  })
+}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -677,6 +721,10 @@ export function SavedJobsTab() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [sourceFilter, setSourceFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [sortField, setSortField] = useState<SortField>('date')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [page, setPage] = useState(1)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -695,6 +743,8 @@ export function SavedJobsTab() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => { setPage(1) }, [search, sourceFilter, statusFilter, sortField, sortDir])
+
   const handleDelete = (id: string) => setJobs(prev => prev.filter(j => j.id !== id))
 
   const handleStatusChange = (jobId: string, status: AppStatus, appId: string) => {
@@ -703,17 +753,26 @@ export function SavedJobsTab() {
     ))
   }
 
-  const filtered = jobs.filter(j => {
-    const matchesSource = sourceFilter === 'all' || j.source === sourceFilter
-    const q = search.toLowerCase()
-    const matchesSearch = !q || [j.title, j.company, j.location, ...(j.tags ?? [])].some(f => f?.toLowerCase().includes(q))
-    return matchesSource && matchesSearch
-  })
+  const filtered = sortJobs(
+    jobs.filter(j => {
+      if (sourceFilter !== 'all' && j.source !== sourceFilter) return false
+      if (statusFilter === 'none' && j.application_status != null) return false
+      if (statusFilter !== 'all' && statusFilter !== 'none' && j.application_status !== statusFilter) return false
+      const q = search.toLowerCase()
+      if (q && ![j.title, j.company, j.location, ...(j.tags ?? [])].some(f => f?.toLowerCase().includes(q))) return false
+      return true
+    }),
+    sortField,
+    sortDir
+  )
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -723,17 +782,39 @@ export function SavedJobsTab() {
             className="pl-8"
           />
         </div>
-        <div className="flex gap-1.5">
-          {SOURCES.map(s => (
-            <button
-              key={s.value}
-              onClick={() => setSourceFilter(s.value)}
-              className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${sourceFilter === s.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'}`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+
+        <select
+          value={sourceFilter}
+          onChange={e => setSourceFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          {STATUS_FILTER_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+
+        <select
+          value={sortField}
+          onChange={e => setSortField(e.target.value as SortField)}
+          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          {SORT_FIELDS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+
+        <select
+          value={sortDir}
+          onChange={e => setSortDir(e.target.value as SortDir)}
+          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          {SORT_DIR.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+
         <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </Button>
@@ -742,7 +823,7 @@ export function SavedJobsTab() {
       {/* Stats */}
       {!loading && !error && (
         <p className="text-xs text-muted-foreground">
-          {filtered.length} משרות{sourceFilter !== 'all' ? ` מ-${SOURCES.find(s => s.value === sourceFilter)?.label}` : ''} — ממוינות לפי התאמה
+          {filtered.length} משרות{totalPages > 1 ? ` — עמוד ${page} מתוך ${totalPages}` : ''}
         </p>
       )}
 
@@ -766,10 +847,51 @@ export function SavedJobsTab() {
         </div>
       )}
 
-      {/* Job list */}
-      {!loading && filtered.map(job => (
-        <SavedJobCard key={job.id} job={job} onDelete={handleDelete} onStatusChange={handleStatusChange} />
-      ))}
+      {/* Job grid */}
+      {!loading && paginated.length > 0 && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {paginated.map(job => (
+            <SavedJobCard key={job.id} job={job} onDelete={handleDelete} onStatusChange={handleStatusChange} />
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <Button
+            variant="outline" size="sm"
+            disabled={page === 1}
+            onClick={() => setPage(p => p - 1)}
+          >← הקודם</Button>
+
+          <div className="flex gap-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+              .reduce<(number | '...')[]>((acc, p, i, arr) => {
+                if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push('...')
+                acc.push(p)
+                return acc
+              }, [])
+              .map((p, i) =>
+                p === '...'
+                  ? <span key={`e${i}`} className="px-1 text-muted-foreground text-sm">…</span>
+                  : <button
+                      key={p}
+                      onClick={() => setPage(p as number)}
+                      className={`w-8 h-8 text-xs rounded-md border transition-colors ${page === p ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'}`}
+                    >{p}</button>
+              )
+            }
+          </div>
+
+          <Button
+            variant="outline" size="sm"
+            disabled={page === totalPages}
+            onClick={() => setPage(p => p + 1)}
+          >הבא →</Button>
+        </div>
+      )}
     </div>
   )
 }

@@ -17,7 +17,7 @@ interface ParsedJob {
   url: string
   tags: string[]
   snippet: string
-  source: 'whatsapp' | 'telegram'
+  source: 'whatsapp' | 'telegram' | 'url'
   source_name: string
   match_score: number
   raw_message: string
@@ -49,11 +49,18 @@ function ScoreBadge({ score }: { score: number }) {
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color}`}>{score}% match</span>
 }
 
-function SourceBadge({ source, name }: { source: 'whatsapp' | 'telegram'; name: string }) {
+function SourceBadge({ source, name }: { source: 'whatsapp' | 'telegram' | 'url'; name: string }) {
   if (source === 'whatsapp') {
     return (
       <span className="flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
         <WhatsAppIcon className="h-3 w-3" /> {name}
+      </span>
+    )
+  }
+  if (source === 'url') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full">
+        <Search className="h-3 w-3" /> {name}
       </span>
     )
   }
@@ -718,10 +725,100 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
   )
 }
 
+// ── URL Panel ─────────────────────────────────────────────────────────────────
+
+function UrlPanel({ userProfile }: { userProfile?: string }) {
+  const [urls, setUrls] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [jobs, setJobs] = useState<ParsedJob[]>([])
+  const [errors, setErrors] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  const handleScan = async () => {
+    const urlList = urls.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'))
+    if (urlList.length === 0) return
+    setScanning(true)
+    setError(null)
+    setErrors([])
+    try {
+      const res = await fetch('/api/messaging/url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: urlList, userProfile }),
+      })
+      const data = await res.json() as { jobs?: ParsedJob[]; errors?: string[]; error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Scan failed')
+      setJobs(data.jobs ?? [])
+      setErrors(data.errors ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Scan failed')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5 text-violet-500" />
+            Scan Job URLs
+          </CardTitle>
+          <CardDescription>
+            Paste links to job pages — career sites, job boards, or individual listings
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">URLs to scan (one per line)</Label>
+            <textarea
+              className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm resize-y font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder={"https://www.somecompany.com/careers\nhttps://www.jobboard.co.il/job/12345"}
+              value={urls}
+              onChange={e => setUrls(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Works best with public career pages. LinkedIn and Indeed block automated access.</p>
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {errors.length > 0 && (
+            <div className="space-y-1">
+              {errors.map((e, i) => (
+                <p key={i} className="text-xs text-amber-600 flex items-start gap-1">
+                  <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />{e}
+                </p>
+              ))}
+            </div>
+          )}
+
+          <Button
+            className="w-full"
+            disabled={!urls.trim() || scanning}
+            onClick={handleScan}
+          >
+            {scanning
+              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Scanning pages...</>
+              : <><Search className="h-4 w-4 mr-2" />Extract Jobs from URLs</>
+            }
+          </Button>
+        </CardContent>
+      </Card>
+
+      {jobs.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold">{jobs.length} jobs extracted from URLs</h3>
+          {jobs.map((job, i) => <CommunityJobCard key={i} job={job} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export function CommunityJobs({ userProfile }: { userProfile?: string }) {
-  const [activeSource, setActiveSource] = useState<'whatsapp' | 'telegram'>('whatsapp')
+  const [activeSource, setActiveSource] = useState<'whatsapp' | 'telegram' | 'url'>('whatsapp')
 
   return (
     <div className="space-y-4">
@@ -738,16 +835,22 @@ export function CommunityJobs({ userProfile }: { userProfile?: string }) {
         >
           <TelegramIcon className="h-4 w-4" /> Telegram
         </button>
+        <button
+          onClick={() => setActiveSource('url')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border transition-colors ${activeSource === 'url' ? 'bg-violet-500 text-white border-violet-500' : 'bg-background hover:bg-muted border-border'}`}
+        >
+          <Search className="h-4 w-4" /> Web URL
+        </button>
       </div>
 
-      {activeSource === 'whatsapp'
-        ? <WhatsAppPanel userProfile={userProfile} />
-        : <TelegramPanel userProfile={userProfile} />
-      }
+      {activeSource === 'whatsapp' && <WhatsAppPanel userProfile={userProfile} />}
+      {activeSource === 'telegram' && <TelegramPanel userProfile={userProfile} />}
+      {activeSource === 'url' && <UrlPanel userProfile={userProfile} />}
 
       <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
         <p className="flex items-center gap-1.5"><MessageCircle className="h-3.5 w-3.5 shrink-0" /><strong>WhatsApp:</strong> Your WhatsApp session is stored only on your local machine. Messages are processed by AI to extract job data.</p>
         <p className="flex items-center gap-1.5"><Send className="h-3.5 w-3.5 shrink-0" /><strong>Telegram:</strong> Your bot token and channel messages are processed by AI. The token is never stored.</p>
+        <p className="flex items-center gap-1.5"><Search className="h-3.5 w-3.5 shrink-0" /><strong>Web URL:</strong> Page content is sent to AI for job extraction. No credentials required.</p>
       </div>
     </div>
   )

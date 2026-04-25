@@ -25,10 +25,10 @@ export default async function JobsPage() {
   ])
 
   return (
-    <div className="container max-w-5xl mx-auto py-8 px-4">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Job Hunter</h1>
-        <p className="text-muted-foreground mt-1">AI agent that searches and scores jobs matching your profile</p>
+    <div className="max-w-7xl mx-auto py-8 px-4">
+      <div className="mb-4 flex items-center gap-3">
+        <h1 className="text-2xl font-bold">Job Hunter</h1>
+        <span className="text-sm text-muted-foreground hidden sm:block">— AI agent that searches and scores jobs matching your profile</span>
       </div>
       <JobsPageClient savedJobs={savedJobs || []} resumeId={latestResume?.id ?? null} />
     </div>
