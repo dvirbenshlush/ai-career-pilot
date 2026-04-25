@@ -10,18 +10,51 @@ import { Boom } from '@hapi/boom'
 import qrcode from 'qrcode'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { rm } from 'fs/promises'
+import { rm, readFile, writeFile, mkdir } from 'fs/promises'
 import pino from 'pino'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const AUTH_DIR = path.join(__dirname, '..', 'auth_info', 'whatsapp')
+const STORE_FILE = path.join(__dirname, '..', 'auth_info', 'msg_store.json')
 const logger = pino({ level: 'silent' })
 
-// ── Message store ─────────────────────────────────────────────────────────────
+// ── Message store — persisted to disk ─────────────────────────────────────────
 const MAX_PER_GROUP = 500
 
 interface StoredMsg { text: string; timestamp: number; senderName: string }
 const msgStore = new Map<string, StoredMsg[]>()
+
+// Load from disk on startup
+async function loadStore() {
+  try {
+    const raw = await readFile(STORE_FILE, 'utf-8')
+    const obj = JSON.parse(raw) as Record<string, StoredMsg[]>
+    for (const [jid, msgs] of Object.entries(obj)) {
+      msgStore.set(jid, msgs)
+    }
+    const total = Array.from(msgStore.values()).reduce((s, a) => s + a.length, 0)
+    console.log(`[WA] Loaded ${msgStore.size} groups / ${total} msgs from disk`)
+  } catch {
+    // File doesn't exist yet — start fresh
+  }
+}
+
+// Debounced write — at most once every 4 seconds
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleSave() {
+  if (saveTimer) return
+  saveTimer = setTimeout(async () => {
+    saveTimer = null
+    try {
+      await mkdir(path.dirname(STORE_FILE), { recursive: true })
+      const obj: Record<string, StoredMsg[]> = {}
+      for (const [jid, msgs] of msgStore.entries()) obj[jid] = msgs
+      await writeFile(STORE_FILE, JSON.stringify(obj))
+    } catch (e) {
+      console.error('[WA] Failed to save store:', e)
+    }
+  }, 4000)
+}
 
 function storeMsg(jid: string, text: string, ts: number, senderName: string) {
   const t = text.trim()
@@ -32,6 +65,7 @@ function storeMsg(jid: string, text: string, ts: number, senderName: string) {
   if (arr.some(m => m.timestamp === ts && m.text === t)) return
   arr.push({ text: t, timestamp: ts, senderName })
   if (arr.length > MAX_PER_GROUP) arr.splice(0, arr.length - MAX_PER_GROUP)
+  scheduleSave()
 }
 
 function extractText(msg: WAMessage): string {
@@ -100,8 +134,16 @@ export function getWAState() {
   }
 }
 
+let storeLoaded = false
+
 export async function connectWhatsApp(): Promise<void> {
   if (state.status === 'connected' || state.status === 'connecting') return
+
+  // Load persisted messages on first call
+  if (!storeLoaded) {
+    storeLoaded = true
+    await loadStore()
+  }
 
   state.status = 'connecting'
   state.qrBase64 = null
