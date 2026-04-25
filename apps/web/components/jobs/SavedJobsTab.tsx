@@ -289,7 +289,7 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
   }
 
   const handleDelete = async () => {
-    if (job.id === '__mock__') { onDelete(job.id); return }
+
     setDeleting(true)
     try {
       await fetch('/api/jobs/saved', {
@@ -575,28 +575,6 @@ const SOURCES = [
   { value: 'telegram', label: 'Telegram' },
 ]
 
-// ── Mock job for UI testing ───────────────────────────────────────────────────
-const MOCK_JOB: SavedJob = {
-  id: '__mock__',
-  title: 'Full Stack Developer',
-  company: 'StartupXYZ',
-  location: 'תל אביב / היברידי',
-  salary_range: '25,000-35,000 ₪',
-  remote: true,
-  url: 'https://example.com/apply',
-  match_score: 87,
-  tags: ['React', 'Node.js', 'TypeScript', 'PostgreSQL'],
-  source: 'whatsapp',
-  source_name: 'דרושים הייטק ישראל',
-  snippet: 'חברת סטארטאפ בתחום הפינטק מחפשת מפתח Full Stack לצוות המוצר. עבודה על מוצר SaaS עם מאות לקוחות פעילים. צוות קטן ואנרגטי, הרבה אחריות.',
-  experience_required: '3+ שנות ניסיון ב-React ו-Node.js, ניסיון עם PostgreSQL יתרון',
-  contact: 'jobs@startupxyz.co.il',
-  raw_message: 'שלום חברים 👋\n\nאנחנו ב-StartupXYZ מגייסים Full Stack Developer!\n\n🔧 סטאק: React, Node.js, TypeScript, PostgreSQL\n📍 תל אביב / היברידי (3 ימים מהבית)\n💰 25,000-35,000 ₪ + אופציות\n\nדרישות:\n✅ 3+ שנים ניסיון Full Stack\n✅ ניסיון עם React hooks ו-Node.js\n✅ ניסיון עם PostgreSQL / SQL\n\nיתרונות:\n⭐ ניסיון עם AWS / GCP\n⭐ ניסיון בסביבת סטארטאפ\n\nלשליחת קורות חיים: jobs@startupxyz.co.il\nאו בוואטסאפ: 050-1234567\n\nנשמח לשמוע! 🚀',
-  poster_name: 'דני כהן',
-  why_match: null,
-  found_at: new Date().toISOString(),
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function SavedJobsTab() {
@@ -625,7 +603,7 @@ export function SavedJobsTab() {
 
   const handleDelete = (id: string) => setJobs(prev => prev.filter(j => j.id !== id))
 
-  const filtered = [MOCK_JOB, ...jobs].filter(j => {
+  const filtered = jobs.filter(j => {
     const matchesSource = sourceFilter === 'all' || j.source === sourceFilter
     const q = search.toLowerCase()
     const matchesSearch = !q || [j.title, j.company, j.location, ...(j.tags ?? [])].some(f => f?.toLowerCase().includes(q))
