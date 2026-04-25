@@ -53,16 +53,20 @@ app.post('/whatsapp/scan', async (req, res) => {
     const allJobs = []
     let totalScanned = 0
 
-    // Process each group independently — 25 messages at a time
+    // Process each group independently — 30 messages per group
+    const scannedGroupNames: string[] = []
     for (const gid of groupIds) {
-      const msgs = fetchGroupMessages([gid], 15)
+      const msgs = fetchGroupMessages([gid], 30)
       if (msgs.length === 0) continue
       totalScanned += msgs.length
+      // Collect the display name so the route knows which groups to overwrite
+      const groupName = msgs[0]?.source_name
+      if (groupName) scannedGroupNames.push(groupName)
       const jobs = await parseJobMessages(msgs, userProfile)
       allJobs.push(...jobs)
     }
 
-    return res.json({ jobs: allJobs, messagesScanned: totalScanned })
+    return res.json({ jobs: allJobs, messagesScanned: totalScanned, scannedGroupNames })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return res.status(500).json({ error: msg })

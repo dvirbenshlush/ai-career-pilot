@@ -237,13 +237,7 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
       })
       const data = await res.json() as { jobs?: ParsedJob[]; messagesScanned?: number; error?: string }
       if (!res.ok) throw new Error(data.error ?? 'Scan failed')
-      // Merge new jobs with existing — keep previously found jobs visible
-      setJobs(prev => {
-        const incoming = data.jobs ?? []
-        const existingFPs = new Set(prev.map(j => (j.raw_message || j.snippet || j.title || '').slice(0, 300)))
-        const truly_new = incoming.filter(j => !existingFPs.has((j.raw_message || j.snippet || j.title || '').slice(0, 300)))
-        return [...prev, ...truly_new]
-      })
+      setJobs(data.jobs ?? [])
       setScanInfo({ messagesScanned: data.messagesScanned ?? 0 })
       if ((data.jobs?.length ?? 0) > 0) setSaved(true)
     } catch (err) {
@@ -489,12 +483,7 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
       })
       const data = await res.json() as { jobs?: ParsedJob[]; error?: string }
       if (!res.ok) throw new Error(data.error ?? 'Scan failed')
-      setJobs(prev => {
-        const incoming = data.jobs ?? []
-        const existingFPs = new Set(prev.map(j => (j.raw_message || j.snippet || j.title || '').slice(0, 300)))
-        const truly_new = incoming.filter(j => !existingFPs.has((j.raw_message || j.snippet || j.title || '').slice(0, 300)))
-        return [...prev, ...truly_new]
-      })
+      setJobs(data.jobs ?? [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Scan failed')
     } finally {
