@@ -16,28 +16,25 @@ export interface ParsedJob {
   remote: boolean
   url: string
   tags: string[]
-  snippet: string          // 2-3 sentence AI summary
+  snippet: string              // 2-3 sentence AI summary
   experience_required: string  // e.g. "3+ years React, 2+ years Node"
-  contact: string          // email / phone / application link extracted from message
+  contact: string              // email / phone / application link extracted from message
   source: 'whatsapp' | 'telegram'
   source_name: string
   match_score: number
-  raw_message: string      // full original message text
+  raw_message: string          // full original message text
 }
 
-export async function parseJobMessages(
+const CHUNK_SIZE = 5          // messages per Groq call
+const MSG_PREVIEW = 500       // chars sent to Groq for classification (raw_message stored separately)
+
+async function parseBatch(
   messages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string }>,
-  userProfile?: string
+  profileContext: string
 ): Promise<ParsedJob[]> {
-  if (messages.length === 0) return []
-
   const batch = messages
-    .map((m, i) => `[${i}] SOURCE: ${m.source}/${m.source_name}\nMESSAGE: ${m.text.slice(0, 1200)}`)
+    .map((m, i) => `[${i}] SOURCE: ${m.source}/${m.source_name}\nMESSAGE: ${m.text.slice(0, MSG_PREVIEW)}`)
     .join('\n\n---\n\n')
-
-  const profileContext = userProfile
-    ? `USER PROFILE: ${userProfile}\nScore each job 0-100 based on how well it matches this profile.`
-    : 'Set match_score to 50 for all jobs (no profile provided).'
 
   const completion = await getGroq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',
@@ -54,35 +51,69 @@ ${profileContext}
 MESSAGES:
 ${batch}
 
-For each message that contains a job posting, extract ALL of the following fields:
-- title: job title (translate to Hebrew if needed, or keep English)
-- company: company name (or empty string if unknown)
-- location: city/country or "Remote" (or empty string)
-- salary_range: salary / hourly rate if mentioned (or empty string)
-- remote: true if remote or hybrid is mentioned
-- url: full URL from message for applying (or empty string)
-- tags: up to 8 relevant skill/tech/role tags (e.g. ["React","Node.js","Senior","Full-stack"])
-- snippet: 2-3 sentence summary of the role — what they do, what they build, team size if mentioned
-- experience_required: experience requirements extracted verbatim or summarized (e.g. "3+ שנות ניסיון ב-React, ניסיון ב-Node.js יתרון" or empty string)
-- contact: how to apply — extract email address, phone number, or WhatsApp link from the message (or empty string)
-- source: "whatsapp" or "telegram" (from the SOURCE field above)
-- source_name: the group/channel name (from the SOURCE field above)
+For each message that IS a job posting extract:
+- title: job title
+- company: company name (or "")
+- location: city or "Remote" (or "")
+- salary_range: salary if mentioned (or "")
+- remote: true if remote/hybrid mentioned
+- url: application URL if present (or "")
+- tags: up to 6 skill/tech tags
+- snippet: 2-3 sentence role summary
+- experience_required: experience requirements verbatim/summarized (or "")
+- contact: email, phone, or WhatsApp link for applying (or "")
+- source: value from SOURCE field
+- source_name: group/channel name from SOURCE field
 - match_score: 0-100
-- raw_message: the COMPLETE original message text, not truncated
+- raw_message: the message index number as string (e.g. "0", "1")
 
-Skip messages that are NOT job postings (news, discussions, spam, personal messages, etc.).
-
+Skip non-job messages (news, discussions, spam).
 Return JSON: { "jobs": [ {...}, ... ] }`,
       },
     ],
-    max_tokens: 6000,
+    max_tokens: 3000,
   })
 
   const raw = completion.choices[0]?.message?.content ?? ''
   try {
     const parsed = JSON.parse(jsonrepair(raw))
-    return (parsed.jobs ?? []) as ParsedJob[]
+    const jobs = (parsed.jobs ?? []) as ParsedJob[]
+    // Attach full original message text using the index returned by the model
+    return jobs.map(j => {
+      const idx = parseInt(j.raw_message, 10)
+      const original = !isNaN(idx) && messages[idx] ? messages[idx].text : j.raw_message
+      return { ...j, raw_message: original }
+    })
   } catch {
     return []
   }
+}
+
+export async function parseJobMessages(
+  messages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string }>,
+  userProfile?: string
+): Promise<ParsedJob[]> {
+  if (messages.length === 0) return []
+
+  const profileContext = userProfile
+    ? `USER PROFILE: ${userProfile}\nScore each job 0-100 based on how well it matches this profile.`
+    : 'Set match_score to 50 for all jobs (no profile provided).'
+
+  const results: ParsedJob[] = []
+
+  for (let i = 0; i < messages.length; i += CHUNK_SIZE) {
+    const chunk = messages.slice(i, i + CHUNK_SIZE)
+    try {
+      const jobs = await parseBatch(chunk, profileContext)
+      results.push(...jobs)
+    } catch (err) {
+      console.error(`Groq batch ${i}-${i + CHUNK_SIZE} failed:`, err)
+    }
+    // Small delay between chunks to avoid TPM burst
+    if (i + CHUNK_SIZE < messages.length) {
+      await new Promise(r => setTimeout(r, 1000))
+    }
+  }
+
+  return results
 }
