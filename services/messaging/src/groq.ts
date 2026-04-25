@@ -25,7 +25,7 @@ export interface ParsedJob {
   raw_message: string
 }
 
-const CHUNK_SIZE = 5
+const CHUNK_SIZE = 8   // fewer Groq calls — 8 msgs × ~400 chars ≈ 3200 input tokens, well under 12k TPM
 
 async function parseBatch(
   messages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string }>,
@@ -34,7 +34,7 @@ async function parseBatch(
   const batch = messages
     .map((m, i) => {
       const sender = m.sender_name ? ` | SENDER: ${m.sender_name}` : ''
-      return `[${i}] GROUP: ${m.source_name}${sender}\nMESSAGE:\n${m.text.slice(0, 600)}`
+      return `[${i}] GROUP: ${m.source_name}${sender}\nMESSAGE:\n${m.text.slice(0, 400)}`
     })
     .join('\n\n---\n\n')
 

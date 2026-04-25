@@ -55,7 +55,7 @@ app.post('/whatsapp/scan', async (req, res) => {
 
     // Process each group independently — 25 messages at a time
     for (const gid of groupIds) {
-      const msgs = fetchGroupMessages([gid], 25)
+      const msgs = fetchGroupMessages([gid], 15)
       if (msgs.length === 0) continue
       totalScanned += msgs.length
       const jobs = await parseJobMessages(msgs, userProfile)
