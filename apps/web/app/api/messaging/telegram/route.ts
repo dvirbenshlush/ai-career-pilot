@@ -37,41 +37,39 @@ export async function POST(req: NextRequest) {
 
     const data = JSON.parse(text) as { jobs: unknown[]; messagesScanned: number }
 
-    // Replace Telegram jobs in Supabase (delete old, insert fresh)
+    // Upsert jobs — keep existing ones, add only new (dedup by message_fingerprint)
     try {
       const supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('job_opportunities').delete().eq('user_id', user.id).eq('source', 'telegram')
-
-        if (data.jobs.length > 0) {
-          type Job = {
-            title?: string; company?: string; location?: string
-            salary_range?: string; remote?: boolean; url?: string
-            match_score?: number; tags?: string[]; snippet?: string
-            source_name?: string; experience_required?: string
-            contact?: string; raw_message?: string
-          }
-          await supabase.from('job_opportunities').insert(
-            (data.jobs as Job[]).map(j => ({
-              user_id: user.id,
-              title: j.title || 'משרה מטלגרם',
-              company: j.company || '',
-              location: j.location || '',
-              salary_range: j.salary_range || null,
-              remote: j.remote ?? false,
-              url: j.url || '',
-              match_score: j.match_score ?? 50,
-              tags: j.tags || [],
-              source: 'telegram',
-              source_name: j.source_name || null,
-              snippet: j.snippet || null,
-              experience_required: j.experience_required || null,
-              contact: j.contact || null,
-              raw_message: j.raw_message || null,
-            }))
-          )
+      if (user && data.jobs.length > 0) {
+        type Job = {
+          title?: string; company?: string; location?: string
+          salary_range?: string; remote?: boolean; url?: string
+          match_score?: number; tags?: string[]; snippet?: string
+          source_name?: string; experience_required?: string
+          contact?: string; raw_message?: string
         }
+        await supabase.from('job_opportunities').upsert(
+          (data.jobs as Job[]).map(j => ({
+            user_id: user.id,
+            title: j.title || 'משרה מטלגרם',
+            company: j.company || '',
+            location: j.location || '',
+            salary_range: j.salary_range || null,
+            remote: j.remote ?? false,
+            url: j.url || '',
+            match_score: j.match_score ?? 50,
+            tags: j.tags || [],
+            source: 'telegram',
+            source_name: j.source_name || null,
+            snippet: j.snippet || null,
+            experience_required: j.experience_required || null,
+            contact: j.contact || null,
+            raw_message: j.raw_message || null,
+            message_fingerprint: (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim() || null,
+          })),
+          { onConflict: 'user_id,source,message_fingerprint', ignoreDuplicates: true }
+        )
       }
     } catch { /* optional */ }
 

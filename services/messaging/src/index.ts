@@ -35,10 +35,10 @@ app.post('/whatsapp/reset', async (_req, res) => {
 })
 
 app.post('/whatsapp/scan', async (req, res) => {
-  const { groupIds, userProfile, maxAgeDays = 7 } = req.body as {
+  const { groupIds, userProfile, limit = 50 } = req.body as {
     groupIds: string[]
     userProfile?: string
-    maxAgeDays?: number
+    limit?: number
   }
 
   if (!Array.isArray(groupIds) || groupIds.length === 0) {
@@ -51,7 +51,7 @@ app.post('/whatsapp/scan', async (req, res) => {
   }
 
   try {
-    const msgs = fetchGroupMessages(groupIds, maxAgeDays)
+    const msgs = fetchGroupMessages(groupIds, limit)
     if (msgs.length === 0) {
       return res.json({ jobs: [], messagesScanned: 0 })
     }

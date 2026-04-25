@@ -177,20 +177,22 @@ export interface RawMessage {
   timestamp: number
 }
 
-export function fetchGroupMessages(groupIds: string[], maxAgeDays = 7): RawMessage[] {
+export function fetchGroupMessages(groupIds: string[], limit = 50): RawMessage[] {
   if (state.status !== 'connected') throw new Error('WhatsApp not connected')
 
-  const cutoff = Math.floor(Date.now() / 1000) - maxAgeDays * 86400
   const out: RawMessage[] = []
 
   for (const gid of groupIds) {
     const name = state.groups.find(g => g.id === gid)?.name ?? gid
-    for (const { text, timestamp } of msgStore.get(gid) ?? []) {
-      if (timestamp >= cutoff) out.push({ text, source: 'whatsapp', source_name: name, timestamp })
+    const all = msgStore.get(gid) ?? []
+    // Take the last `limit` messages regardless of age or read status
+    const recent = all.slice(-limit)
+    for (const { text, timestamp } of recent) {
+      out.push({ text, source: 'whatsapp', source_name: name, timestamp })
     }
   }
 
-  console.log(`[WA] scan: ${out.length} msgs from last ${maxAgeDays}d in ${groupIds.length} groups`)
+  console.log(`[WA] scan: ${out.length} msgs (last ${limit}/group) from ${groupIds.length} groups`)
   return out
 }
 
