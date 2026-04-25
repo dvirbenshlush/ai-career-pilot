@@ -53,7 +53,7 @@ app.post('/whatsapp/scan', async (req, res) => {
   try {
     const msgs = fetchGroupMessages(groupIds, limit)
     if (msgs.length === 0) {
-      return res.json({ jobs: [], messagesScanned: 0 })
+      return res.json({ jobs: [], messagesScanned: 0, candidatesFiltered: 0 })
     }
     const jobs = await parseJobMessages(msgs, userProfile)
     return res.json({ jobs, messagesScanned: msgs.length })
