@@ -64,16 +64,21 @@ export async function POST(req: NextRequest) {
     try {
       const supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (user && data.jobs.length > 0) {
-        type Job = {
-          title?: string; company?: string; location?: string
-          salary_range?: string; remote?: boolean; url?: string
-          match_score?: number; tags?: string[]; snippet?: string
-          source_name?: string; experience_required?: string
-          contact?: string; raw_message?: string; poster_name?: string
-        }
+      type Job = {
+        title?: string; company?: string; location?: string
+        salary_range?: string; remote?: boolean; url?: string
+        match_score?: number; tags?: string[]; snippet?: string
+        source_name?: string; experience_required?: string
+        contact?: string; raw_message?: string; poster_name?: string
+      }
+      const validJobs = (data.jobs as Job[]).filter(j => {
+        const t = j.title?.trim().toLowerCase()
+        return t && t !== 'unknown' && t !== 'לא ידוע'
+          && j.snippet && j.snippet !== 'No snippet available.'
+      })
+      if (user && validJobs.length > 0) {
         await supabase.from('job_opportunities').upsert(
-          (data.jobs as Job[]).map(j => ({
+          validJobs.map(j => ({
             user_id: user.id,
             title: j.title || 'משרה מוואטסאפ',
             company: j.company || '',

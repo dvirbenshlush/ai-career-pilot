@@ -27,6 +27,18 @@ export interface ParsedJob {
 
 const CHUNK_SIZE = 8   // fewer Groq calls — 8 msgs × ~400 chars ≈ 3200 input tokens, well under 12k TPM
 
+// Messages that are a bare URL with no surrounding text have no extractable job content
+function isUrlOnly(text: string): boolean {
+  return /^https?:\/\/\S+$/.test(text.trim())
+}
+
+function isValidJob(j: ParsedJob): boolean {
+  const title = j.title?.trim().toLowerCase()
+  if (!title || title === 'unknown' || title === 'לא ידוע') return false
+  // Must have at least a snippet or experience info — pure-URL ghost jobs have neither
+  return !!(j.snippet && j.snippet !== 'No snippet available.' && j.snippet.length > 10)
+}
+
 async function parseBatch(
   messages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string }>,
   profileContext: string
@@ -81,20 +93,24 @@ Return JSON: { "jobs": [ {...}, ... ] }`,
   try {
     const parsed = JSON.parse(jsonrepair(raw))
     const jobs = (parsed.jobs ?? []) as ParsedJob[]
-    return jobs.map(j => {
-      const idx = parseInt(j.raw_message, 10)
-      const original = !isNaN(idx) && messages[idx] ? messages[idx].text : j.raw_message
-      return { ...j, raw_message: original }
-    })
+    return jobs
+      .map(j => {
+        const idx = parseInt(j.raw_message, 10)
+        const original = !isNaN(idx) && messages[idx] ? messages[idx].text : j.raw_message
+        return { ...j, raw_message: original }
+      })
+      .filter(isValidJob)
   } catch {
     return []
   }
 }
 
 export async function parseJobMessages(
-  messages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string }>,
+  rawMessages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string }>,
   userProfile?: string
 ): Promise<ParsedJob[]> {
+  // Drop messages that are just a bare URL — nothing for Groq to extract
+  const messages = rawMessages.filter(m => !isUrlOnly(m.text))
   if (messages.length === 0) return []
 
   const profileContext = userProfile
