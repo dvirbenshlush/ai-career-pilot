@@ -27,7 +27,9 @@ async function proxyPost(path: string, body: unknown) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const groupId = req.nextUrl.searchParams.get('groupId')
+  if (groupId) return proxyGet(`/whatsapp/group-messages?groupId=${encodeURIComponent(groupId)}`)
   return proxyGet('/whatsapp/status')
 }
 
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     const data = JSON.parse(text) as { jobs: unknown[]; messagesScanned: number; scannedGroupNames?: string[] }
 
-    // Always reflect the latest 30 messages: delete old jobs for scanned groups, insert fresh ones
+    // Accumulate jobs from all sources — only insert ones not already in DB
     try {
       const supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -74,50 +76,60 @@ export async function POST(req: NextRequest) {
         contact?: string; raw_message?: string; poster_name?: string
       }
 
-      const groupNames = data.scannedGroupNames ?? []
-
-      // Delete stale jobs from every group that was just scanned
-      if (groupNames.length > 0) {
-        const { error: delErr } = await supabase
-          .from('job_opportunities')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('source', 'whatsapp')
-          .in('source_name', groupNames)
-        if (delErr) console.error('[WhatsApp] delete error:', delErr.message)
-      }
-
       const validJobs = (data.jobs as Job[]).filter(j => {
         const t = j.title?.trim().toLowerCase()
         return !!t && t !== 'unknown' && t !== 'לא ידוע' && t !== 'n/a'
       })
 
       if (validJobs.length > 0) {
-        const { error: insertErr } = await supabase.from('job_opportunities').insert(
-          validJobs.map(j => ({
-            user_id: user.id,
-            title: j.title!,
-            company: j.company || '',
-            location: j.location || '',
-            salary_range: j.salary_range || null,
-            remote: j.remote ?? false,
-            url: j.url || '',
-            match_score: j.match_score ?? 50,
-            tags: j.tags || [],
-            source: 'whatsapp',
-            source_name: j.source_name || null,
-            snippet: j.snippet || null,
-            experience_required: j.experience_required || null,
-            contact: j.contact || null,
-            raw_message: j.raw_message || null,
-            poster_name: j.poster_name || null,
-            message_fingerprint: (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim() || null,
-          }))
-        )
-        if (insertErr) console.error('[WhatsApp] insert error:', insertErr.message)
-        else console.log(`[WhatsApp] replaced jobs for [${groupNames.join(', ')}] → ${validJobs.length} jobs saved`)
-      } else {
-        console.log(`[WhatsApp] no valid jobs found in [${groupNames.join(', ')}] — old entries cleared`)
+        const fps = validJobs
+          .map(j => (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim())
+          .filter(Boolean)
+
+        const { data: existing } = await supabase
+          .from('job_opportunities')
+          .select('message_fingerprint')
+          .eq('user_id', user.id)
+          .eq('source', 'whatsapp')
+          .in('message_fingerprint', fps)
+
+        const existingSet = new Set((existing ?? []).map(r => r.message_fingerprint))
+        const newJobs = validJobs.filter(j => {
+          const fp = (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim()
+          return !existingSet.has(fp)
+        })
+
+        if (newJobs.length > 0) {
+          const { error: insertErr } = await supabase.from('job_opportunities').insert(
+            newJobs.map(j => ({
+              user_id: user.id,
+              title: j.title!,
+              company: j.company || '',
+              location: j.location || '',
+              salary_range: j.salary_range || null,
+              remote: j.remote ?? false,
+              url: j.url || '',
+              match_score: j.match_score ?? 50,
+              tags: j.tags || [],
+              source: 'whatsapp',
+              source_name: j.source_name || null,
+              snippet: j.snippet || null,
+              experience_required: j.experience_required || null,
+              contact: j.contact || null,
+              raw_message: j.raw_message || null,
+              poster_name: j.poster_name || null,
+              message_fingerprint: (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim() || null,
+              found_at: new Date().toISOString(),
+            }))
+          )
+          if (insertErr) {
+            console.error('[WhatsApp] insert error:', insertErr.message)
+            return NextResponse.json({ ...data, dbError: insertErr.message }, { status })
+          }
+          console.log(`[WhatsApp] +${newJobs.length} new jobs saved (${validJobs.length - newJobs.length} already in DB)`)
+        } else {
+          console.log(`[WhatsApp] all ${validJobs.length} jobs already in DB — nothing new`)
+        }
       }
     } catch (e) { console.error('[WhatsApp] save error:', e) }
 

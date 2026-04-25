@@ -9,7 +9,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Target, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Download } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Loader2, Target, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Download, Send, Mail } from 'lucide-react'
+
+type Gender = 'male' | 'female'
+function getStoredGender(): Gender | null {
+  try { return localStorage.getItem('userGender') as Gender | null } catch { return null }
+}
 
 interface MatchAnalysisProps {
   resumeId: string
@@ -75,6 +81,10 @@ export function MatchAnalysis({ resumeId }: MatchAnalysisProps) {
   const [error, setError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
   const [cvLanguage, setCvLanguage] = useState<'en' | 'he'>('en')
+  const [contactEmail, setContactEmail] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const [genderPicker, setGenderPicker] = useState(false)
 
   const handleAnalyze = async () => {
     if (!jobDescription.trim()) return
@@ -89,7 +99,26 @@ export function MatchAnalysis({ resumeId }: MatchAnalysisProps) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setResult(data.analysis)
+      const analysis: AnalysisResult = data.analysis
+      setResult(analysis)
+
+      // Save to job_opportunities so it appears alongside WhatsApp/Telegram jobs
+      fetch('/api/jobs/saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: jobTitle || 'Job Opportunity',
+          company,
+          url: jobUrl,
+          match_score: analysis.score,
+          tags: analysis.matching_keywords.map(k => k.keyword).slice(0, 8),
+          source: 'search',
+          snippet: analysis.tailored_suggestions?.slice(0, 300) || null,
+          contact: contactEmail.trim() || null,
+          raw_message: jobDescription,
+          message_fingerprint: jobDescription.slice(0, 300).trim(),
+        }),
+      }).catch(() => { /* silent — don't block UI */ })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
     } finally {
@@ -135,6 +164,76 @@ export function MatchAnalysis({ resumeId }: MatchAnalysisProps) {
     }
   }
 
+  const doSend = async (gender: Gender) => {
+    setSending(true)
+    setSendError(null)
+    try {
+      const res = await fetch('/api/jobs/send-cv-gmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobTitle,
+          company,
+          contactEmail: contactEmail.trim() || undefined,
+          snippet: result?.tailored_suggestions?.slice(0, 300),
+          gender,
+        }),
+      })
+      const data = await res.json() as { ok?: boolean; gmailUrl?: string; error?: string }
+      if (!res.ok || !data.ok) { setSendError(data.error ?? 'שגיאה בהכנת המייל'); return }
+      window.open(data.gmailUrl, '_blank')
+    } catch {
+      setSendError('שגיאת רשת — נסה שוב')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const startSendFlow = async (gender: Gender) => {
+    setSendError(null)
+    const statusRes = await fetch('/api/gmail/status')
+    const status = await statusRes.json() as { connected: boolean }
+
+    if (!status.connected) {
+      const popup = window.open('/api/gmail/auth?returnTo=/resume', 'gmail-auth', 'width=520,height=620,left=200,top=100')
+      if (!popup) { setSendError('חסום popup — אפשר פופ-אפים לאתר זה'); return }
+
+      setSending(true)
+      await new Promise<void>((resolve, reject) => {
+        const done = (err?: Error) => { clearInterval(poll); clearTimeout(timeout); err ? reject(err) : resolve() }
+        const timeout = setTimeout(() => done(new Error('פג זמן ההמתנה להתחברות')), 60_000)
+        const poll = setInterval(async () => {
+          try {
+            const r = await fetch('/api/gmail/status')
+            const s = await r.json() as { connected: boolean }
+            if (s.connected) { done(); return }
+          } catch { /* ignore */ }
+          let isClosed = false
+          try { isClosed = popup.closed } catch { /* COOP */ }
+          if (isClosed) {
+            await new Promise(r => setTimeout(r, 1200))
+            try { const r = await fetch('/api/gmail/status'); const s = await r.json() as { connected: boolean }; if (s.connected) { done(); return } } catch { /* ignore */ }
+            done(new Error('חלון ההתחברות נסגר ללא אימות'))
+          }
+        }, 1000)
+      }).catch(err => { setSendError(err.message); setSending(false); throw err })
+    }
+
+    await doSend(gender)
+  }
+
+  const handleSendCv = () => {
+    const gender = getStoredGender()
+    if (!gender) { setGenderPicker(true); return }
+    startSendFlow(gender)
+  }
+
+  const pickGender = (gender: Gender) => {
+    try { localStorage.setItem('userGender', gender) } catch { /* ignore */ }
+    setGenderPicker(false)
+    startSendFlow(gender)
+  }
+
   const scoreColor = result
     ? result.score >= 75 ? 'text-green-600'
     : result.score >= 50 ? 'text-yellow-600'
@@ -168,9 +267,17 @@ export function MatchAnalysis({ resumeId }: MatchAnalysisProps) {
               <Input id="company" placeholder="e.g. Stripe" value={company} onChange={e => setCompany(e.target.value)} />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="job-url">Job URL (optional)</Label>
-            <Input id="job-url" placeholder="https://..." value={jobUrl} onChange={e => setJobUrl(e.target.value)} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="job-url">Job URL (optional)</Label>
+              <Input id="job-url" placeholder="https://..." value={jobUrl} onChange={e => setJobUrl(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contact-email" className="flex items-center gap-1">
+                <Mail className="h-3.5 w-3.5" /> Contact Email (optional)
+              </Label>
+              <Input id="contact-email" type="email" placeholder="hr@company.com" value={contactEmail} onChange={e => setContactEmail(e.target.value)} />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="job-desc">Job Description *</Label>
@@ -186,8 +293,37 @@ export function MatchAnalysis({ resumeId }: MatchAnalysisProps) {
           <Button onClick={handleAnalyze} disabled={!jobDescription.trim() || loading} className="w-full">
             {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing with AI...</> : 'Analyze Match'}
           </Button>
+          {contactEmail.trim() && (
+            <>
+              <Button
+                variant="outline"
+                className="w-full text-green-700 border-green-300 hover:bg-green-50"
+                onClick={handleSendCv}
+                disabled={sending}
+              >
+                {sending
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> מכין מייל...</>
+                  : <><Send className="mr-2 h-4 w-4" /> שלח קו&quot;ח ל-{contactEmail.trim()}</>
+                }
+              </Button>
+              {sendError && <p className="text-sm text-destructive">{sendError}</p>}
+            </>
+          )}
         </CardContent>
       </Card>
+
+      <Dialog open={genderPicker} onOpenChange={setGenderPicker}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>בחר מגדר לניסוח</DialogTitle>
+            <DialogDescription>מאפשר לנסח את מכתב הלוואי בצורה מדויקת בעברית</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-2">
+            <Button className="flex-1" onClick={() => pickGender('male')}>זכר</Button>
+            <Button className="flex-1" variant="outline" onClick={() => pickGender('female')}>נקבה</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {result && (
         <div className="space-y-4">

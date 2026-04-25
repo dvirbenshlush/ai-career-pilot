@@ -25,7 +25,8 @@ export interface ParsedJob {
   raw_message: string
 }
 
-const CHUNK_SIZE = 8   // fewer Groq calls — 8 msgs × ~400 chars ≈ 3200 input tokens, well under 12k TPM
+const MODEL = 'llama-3.1-8b-instant'   // 500k TPD; TPM limit is 6000 so keep batches small
+const CHUNK_SIZE = 4                    // 4 msgs × 200 chars ≈ ~1500 input tokens, safe under 6k TPM
 
 function hasTitle(j: ParsedJob): boolean {
   const t = j.title?.trim().toLowerCase()
@@ -39,12 +40,12 @@ async function parseBatch(
   const batch = messages
     .map((m, i) => {
       const sender = m.sender_name ? ` | SENDER: ${m.sender_name}` : ''
-      return `[${i}] GROUP: ${m.source_name}${sender}\nMESSAGE:\n${m.text.slice(0, 400)}`
+      return `[${i}] GROUP: ${m.source_name}${sender}\nMESSAGE:\n${m.text.slice(0, 200)}`
     })
     .join('\n\n---\n\n')
 
   const completion = await getGroq().chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+    model: MODEL,
     messages: [
       {
         role: 'system',
@@ -79,7 +80,7 @@ Skip ONLY: messages with zero job content (pure social chat with no role/skill/h
 Return JSON: { "jobs": [ {...}, ... ] }`,
       },
     ],
-    max_tokens: 3000,
+    max_tokens: 1500,
   })
 
   const raw = completion.choices[0]?.message?.content ?? ''
@@ -123,6 +124,13 @@ export async function parseJobMessages(
       console.log(`[Groq] chunk ${i}-${i + chunk.length}: found ${jobs.length} jobs`)
       results.push(...jobs)
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // Surface rate-limit errors immediately — no point processing remaining chunks
+      if (msg.includes('429') || msg.includes('rate_limit_exceeded') || msg.includes('Rate limit')) {
+        const retryMatch = msg.match(/try again in ([^.]+)/)
+        const retryIn = retryMatch ? ` נסה שוב בעוד ${retryMatch[1]}` : ''
+        throw new Error(`מגבלת Groq הגיעה לקצה היומי.${retryIn}`)
+      }
       console.error(`[Groq] chunk ${i}-${i + chunk.length} failed:`, err)
     }
   }

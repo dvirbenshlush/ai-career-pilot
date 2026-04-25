@@ -21,6 +21,19 @@ app.get('/whatsapp/status', (_req, res) => {
   res.json(getWAState())
 })
 
+app.get('/whatsapp/group-messages', (req, res) => {
+  const groupId = req.query.groupId as string
+  if (!groupId) return res.status(400).json({ error: 'groupId required' })
+  const s = getWAState()
+  if (s.status !== 'connected') return res.status(400).json({ messages: [] })
+  try {
+    const msgs = fetchGroupMessages([groupId])
+    return res.json({ messages: msgs.map(m => ({ text: m.text, sender_name: m.sender_name })) })
+  } catch {
+    return res.json({ messages: [] })
+  }
+})
+
 app.post('/whatsapp/disconnect', (_req, res) => {
   disconnectWhatsApp()
   res.json({ ok: true })

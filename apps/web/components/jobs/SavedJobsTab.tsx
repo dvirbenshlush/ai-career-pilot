@@ -12,8 +12,17 @@ import {
 import {
   Loader2, ExternalLink, MapPin, DollarSign, Wifi, Sparkles,
   Trash2, Search, RefreshCw, Building2, ChevronDown, ChevronUp,
-  Briefcase, Mail, Phone, Send, User, GraduationCap, CheckCircle2,
+  Briefcase, Mail, Phone, Send, User, GraduationCap, CheckCircle2, Circle,
 } from 'lucide-react'
+
+type AppStatus = 'applied' | 'interviewing' | 'offer' | 'rejected'
+
+const STATUS_CONFIG: Record<AppStatus, { label: string; color: string; dot: string }> = {
+  applied:      { label: 'Applied',      color: 'bg-blue-100 text-blue-700 border-blue-200',   dot: 'bg-blue-500' },
+  interviewing: { label: 'Interviewing', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
+  offer:        { label: 'Offer',        color: 'bg-green-100 text-green-700 border-green-200', dot: 'bg-green-500' },
+  rejected:     { label: 'Rejected',     color: 'bg-red-100 text-red-700 border-red-200',      dot: 'bg-red-500' },
+}
 
 interface InterviewQuestion { category: 'טכני' | 'התנהגותי' | 'חברה'; question: string }
 interface AnswerFeedback { score: number; analysis: string; improvements: string[] }
@@ -43,6 +52,8 @@ interface SavedJob {
   raw_message: string | null
   poster_name: string | null
   found_at: string
+  application_id: string | null
+  application_status: AppStatus | null
 }
 
 // ── Source badge ──────────────────────────────────────────────────────────────
@@ -116,7 +127,84 @@ function ContactChip({ contact }: { contact: string }) {
   )
 }
 
-function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string) => void }) {
+function StatusPicker({
+  jobId, applicationId, currentStatus, onChange,
+}: {
+  jobId: string
+  applicationId: string | null
+  currentStatus: AppStatus | null
+  onChange: (status: AppStatus, newAppId: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const select = async (status: AppStatus) => {
+    setOpen(false)
+    setLoading(true)
+    try {
+      if (applicationId) {
+        await fetch(`/api/applications/${applicationId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status }),
+        })
+        onChange(status, applicationId)
+      } else {
+        const res = await fetch('/api/applications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_opportunity_id: jobId, status }),
+        })
+        const data = await res.json() as { application?: { id: string } }
+        onChange(status, data.application?.id ?? '')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const cfg = currentStatus ? STATUS_CONFIG[currentStatus] : null
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        disabled={loading}
+        className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border transition-colors ${
+          cfg ? cfg.color : 'bg-muted text-muted-foreground border-border hover:bg-muted/70'
+        }`}
+      >
+        {loading
+          ? <Loader2 className="h-3 w-3 animate-spin" />
+          : <span className={`h-2 w-2 rounded-full shrink-0 ${cfg ? cfg.dot : 'bg-muted-foreground/40'}`} />
+        }
+        {cfg ? cfg.label : 'הגדר סטטוס'}
+      </button>
+
+      {open && (
+        <div className="absolute top-full mt-1 left-0 z-50 bg-popover border rounded-lg shadow-lg p-1 min-w-[140px]">
+          {(Object.entries(STATUS_CONFIG) as [AppStatus, typeof STATUS_CONFIG[AppStatus]][]).map(([s, c]) => (
+            <button
+              key={s}
+              onClick={() => select(s)}
+              className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-md hover:bg-muted transition-colors ${s === currentStatus ? 'font-semibold' : ''}`}
+            >
+              <span className={`h-2 w-2 rounded-full shrink-0 ${c.dot}`} />
+              {c.label}
+              {s === currentStatus && <span className="ml-auto">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SavedJobCard({ job, onDelete, onStatusChange }: {
+  job: SavedJob
+  onDelete: (id: string) => void
+  onStatusChange: (jobId: string, status: AppStatus, appId: string) => void
+}) {
   const [deleting, setDeleting] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [sending, setSending] = useState(false)
@@ -324,6 +412,12 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
                   <Wifi className="h-3 w-3" /> Remote
                 </span>
               )}
+              <StatusPicker
+                jobId={job.id}
+                applicationId={job.application_id}
+                currentStatus={job.application_status}
+                onChange={(status, appId) => onStatusChange(job.id, status, appId)}
+              />
             </div>
 
             {/* Company & meta */}
@@ -603,6 +697,12 @@ export function SavedJobsTab() {
 
   const handleDelete = (id: string) => setJobs(prev => prev.filter(j => j.id !== id))
 
+  const handleStatusChange = (jobId: string, status: AppStatus, appId: string) => {
+    setJobs(prev => prev.map(j =>
+      j.id === jobId ? { ...j, application_status: status, application_id: appId } : j
+    ))
+  }
+
   const filtered = jobs.filter(j => {
     const matchesSource = sourceFilter === 'all' || j.source === sourceFilter
     const q = search.toLowerCase()
@@ -668,7 +768,7 @@ export function SavedJobsTab() {
 
       {/* Job list */}
       {!loading && filtered.map(job => (
-        <SavedJobCard key={job.id} job={job} onDelete={handleDelete} />
+        <SavedJobCard key={job.id} job={job} onDelete={handleDelete} onStatusChange={handleStatusChange} />
       ))}
     </div>
   )

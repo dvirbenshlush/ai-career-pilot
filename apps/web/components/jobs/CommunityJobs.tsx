@@ -65,6 +65,9 @@ function SourceBadge({ source, name }: { source: 'whatsapp' | 'telegram'; name: 
 }
 
 function CommunityJobCard({ job }: { job: ParsedJob }) {
+  const [expanded, setExpanded] = useState(false)
+  const fullText = job.raw_message || ''
+
   return (
     <Card className="hover:shadow-sm transition-shadow">
       <CardContent className="pt-4 pb-4">
@@ -90,12 +93,24 @@ function CommunityJobCard({ job }: { job: ParsedJob }) {
                 <Sparkles className="h-3 w-3 mt-0.5 shrink-0" />{job.snippet}
               </p>
             )}
-            {!job.snippet && job.raw_message && (
-              <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{job.raw_message}</p>
-            )}
             {job.tags?.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {job.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
+              </div>
+            )}
+            {fullText && (
+              <div className="mt-2 border-t pt-2">
+                <button
+                  onClick={() => setExpanded(e => !e)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {expanded ? '▲ הסתר הודעה מקורית' : '▼ הצג הודעה מקורית'}
+                </button>
+                {expanded && (
+                  <p className="mt-1.5 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed bg-muted/40 rounded p-2 max-h-64 overflow-y-auto">
+                    {fullText}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -128,6 +143,12 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
   const [jobs, setJobs] = useState<ParsedJob[]>([])
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null)
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null)
+  const [previewMsgs, setPreviewMsgs] = useState<Array<{ text: string; sender_name: string }>>([])
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const previewCache = useRef<Record<string, Array<{ text: string; sender_name: string }>>>({})
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const connectedAtRef = useRef<number | null>(null)
 
@@ -235,16 +256,56 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'scan', groupIds: selectedGroups, userProfile }),
       })
-      const data = await res.json() as { jobs?: ParsedJob[]; messagesScanned?: number; error?: string }
+      const data = await res.json() as { jobs?: ParsedJob[]; messagesScanned?: number; error?: string; dbError?: string }
       if (!res.ok) throw new Error(data.error ?? 'Scan failed')
       setJobs(data.jobs ?? [])
       setScanInfo({ messagesScanned: data.messagesScanned ?? 0 })
-      if ((data.jobs?.length ?? 0) > 0) setSaved(true)
+      if (data.dbError) setError(`שגיאת שמירה ל-DB: ${data.dbError}`)
+      else if ((data.jobs?.length ?? 0) > 0) setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Scan failed')
     } finally {
       setScanning(false)
     }
+  }
+
+  useEffect(() => {
+    if (!hoveredGroup) { setPreviewMsgs([]); return }
+    if (previewCache.current[hoveredGroup]) {
+      setPreviewMsgs(previewCache.current[hoveredGroup])
+      return
+    }
+    setPreviewLoading(true)
+    fetch(`/api/messaging/whatsapp?groupId=${encodeURIComponent(hoveredGroup)}`)
+      .then(r => r.json())
+      .then((data: { messages?: Array<{ text: string; sender_name: string }> }) => {
+        const msgs = data.messages ?? []
+        previewCache.current[hoveredGroup] = msgs
+        setPreviewMsgs(msgs)
+      })
+      .catch(() => setPreviewMsgs([]))
+      .finally(() => setPreviewLoading(false))
+  }, [hoveredGroup])
+
+  const TOOLTIP_W = 320
+  const showTooltip = (e: React.MouseEvent<HTMLLabelElement>, id: string) => {
+    if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null }
+    const rect = e.currentTarget.getBoundingClientRect()
+    const spaceRight = window.innerWidth - rect.right
+    const left = spaceRight >= TOOLTIP_W + 12 ? rect.right + 8 : rect.left - TOOLTIP_W - 8
+    setTooltipPos({ top: rect.top, left })
+    setHoveredGroup(id)
+  }
+
+  const scheduleHide = () => {
+    hideTimer.current = setTimeout(() => {
+      setHoveredGroup(null)
+      setTooltipPos(null)
+    }, 120)
+  }
+
+  const cancelHide = () => {
+    if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null }
   }
 
   const toggleGroup = (id: string) =>
@@ -364,7 +425,12 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
                   <p className="text-xs text-muted-foreground text-center py-3">אין קבוצות תואמות</p>
                 )}
                 {filteredGroups.map(g => (
-                  <label key={g.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-1.5 py-1">
+                  <label
+                    key={g.id}
+                    className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-1.5 py-1"
+                    onMouseEnter={e => showTooltip(e, g.id)}
+                    onMouseLeave={scheduleHide}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedGroups.includes(g.id)}
@@ -373,13 +439,72 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
                     />
                     <span className="text-sm truncate flex-1">{g.name}</span>
                     {storeSummary[g.name] !== undefined && (
-                      <span className="text-xs text-muted-foreground/60 shrink-0" title="הודעות טקסט מ-3 הימים האחרונים">
+                      <span className="text-xs text-muted-foreground/60 shrink-0">
                         {storeSummary[g.name]} ב-3 ימים
                       </span>
                     )}
                   </label>
                 ))}
               </div>
+
+              {/* Fixed-position tooltip — escapes overflow container */}
+              {hoveredGroup && tooltipPos && (
+                <div
+                  style={{ position: 'fixed', top: tooltipPos.top, left: tooltipPos.left, width: TOOLTIP_W, zIndex: 9999 }}
+                  className="bg-popover border rounded-lg shadow-xl text-xs overflow-hidden"
+                  onMouseEnter={cancelHide}
+                  onMouseLeave={scheduleHide}
+                >
+                  <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
+                    <span className="font-semibold text-foreground truncate">
+                      {groups.find(g => g.id === hoveredGroup)?.name ?? hoveredGroup}
+                    </span>
+                    <span className="text-muted-foreground shrink-0 ml-2">הודעות שיסרקו</span>
+                  </div>
+                  {previewLoading ? (
+                    <div className="flex items-center gap-2 px-3 py-3 text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> טוען...
+                    </div>
+                  ) : previewMsgs.length === 0 ? (
+                    <p className="px-3 py-3 text-muted-foreground">אין הודעות ב-3 הימים האחרונים</p>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto divide-y">
+                      {previewMsgs.map((m, i) => (
+                        <div key={i} className="px-3 py-2">
+                          {m.sender_name && (
+                            <p className="font-medium text-muted-foreground text-[10px] mb-0.5">{m.sender_name}</p>
+                          )}
+                          <p className="text-foreground leading-relaxed line-clamp-3">{m.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Selected groups chips */}
+              {selectedGroups.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedGroups.map(id => {
+                    const grp = groups.find(g => g.id === id)
+                    if (!grp) return null
+                    const count = storeSummary[grp.name]
+                    return (
+                      <span
+                        key={id}
+                        onClick={() => toggleGroup(id)}
+                        className="flex items-center gap-1 text-xs bg-muted border rounded-full px-2 py-0.5 cursor-pointer hover:bg-muted/60 transition-colors"
+                      >
+                        <span className="max-w-[140px] truncate">{grp.name}</span>
+                        {count !== undefined && (
+                          <span className="text-muted-foreground">({count})</span>
+                        )}
+                        <XCircle className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
 
               {/* Scan button */}
               <Button className="w-full" disabled={selectedGroups.length === 0 || scanning} onClick={handleScan}>

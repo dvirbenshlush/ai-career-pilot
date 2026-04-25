@@ -94,10 +94,14 @@ export async function POST(req: NextRequest) {
               contact: j.contact || null,
               raw_message: j.raw_message || null,
               message_fingerprint: (j.raw_message || j.snippet || j.title || '').slice(0, 300).trim() || null,
+              found_at: new Date().toISOString(),
             }))
           )
-          if (insertErr) console.error('[Telegram] insert error:', insertErr.message)
-          else console.log(`[Telegram] saved ${newJobs.length} new jobs (${validJobs.length - newJobs.length} duplicates skipped)`)
+          if (insertErr) {
+            console.error('[Telegram] insert error:', insertErr.message)
+            return NextResponse.json({ ...data, dbError: insertErr.message }, { status })
+          }
+          console.log(`[Telegram] saved ${newJobs.length} new jobs (${validJobs.length - newJobs.length} duplicates skipped)`)
         }
       }
     } catch (e) { console.error('[Telegram] save error:', e) }
