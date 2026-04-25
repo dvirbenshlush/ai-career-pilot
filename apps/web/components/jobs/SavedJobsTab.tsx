@@ -5,14 +5,18 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import {
   Loader2, ExternalLink, MapPin, DollarSign, Wifi, Sparkles,
   Trash2, Search, RefreshCw, Building2, ChevronDown, ChevronUp,
-  Briefcase, Mail, Phone, Send, User,
+  Briefcase, Mail, Phone, Send, User, GraduationCap, CheckCircle2,
 } from 'lucide-react'
+
+interface InterviewQuestion { category: 'טכני' | 'התנהגותי' | 'חברה'; question: string }
+interface AnswerFeedback { score: number; analysis: string; improvements: string[] }
 
 type Gender = 'male' | 'female'
 
@@ -118,6 +122,42 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [genderPicker, setGenderPicker] = useState(false)
+  const [interviewOpen, setInterviewOpen] = useState(false)
+  const [interviewLoading, setInterviewLoading] = useState(false)
+  const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
+  const [interviewError, setInterviewError] = useState<string | null>(null)
+  const [answers, setAnswers] = useState<Record<number, string>>({})
+  const [feedback, setFeedback] = useState<Record<number, AnswerFeedback & { loading?: boolean }>>({})
+
+  const setAnswer = (idx: number, val: string) => setAnswers(p => ({ ...p, [idx]: val }))
+
+  const checkAnswer = async (idx: number) => {
+    const q = interviewQuestions[idx]
+    const answer = answers[idx]?.trim()
+    if (!answer) return
+    setFeedback(p => ({ ...p, [idx]: { ...p[idx], loading: true, score: 0, analysis: '', improvements: [] } }))
+    try {
+      const res = await fetch('/api/jobs/interview-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: q.question,
+          answer,
+          jobTitle: job.title,
+          company: job.company,
+          category: q.category,
+        }),
+      })
+      const data = await res.json() as { feedback?: AnswerFeedback; error?: string }
+      if (!res.ok || !data.feedback) {
+        setFeedback(p => ({ ...p, [idx]: { loading: false, score: 0, analysis: data.error ?? 'שגיאה', improvements: [] } }))
+        return
+      }
+      setFeedback(p => ({ ...p, [idx]: { ...data.feedback!, loading: false } }))
+    } catch {
+      setFeedback(p => ({ ...p, [idx]: { loading: false, score: 0, analysis: 'שגיאת רשת', improvements: [] } }))
+    }
+  }
 
   const contactEmail = job.contact?.includes('@') ? job.contact.trim() : null
 
@@ -219,6 +259,33 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
     try { localStorage.setItem('userGender', gender) } catch { /* ignore */ }
     setGenderPicker(false)
     startSendFlow(gender)
+  }
+
+  const openInterview = async () => {
+    setInterviewOpen(true)
+    if (interviewQuestions.length > 0) return // cached
+    setInterviewLoading(true)
+    setInterviewError(null)
+    try {
+      const res = await fetch('/api/jobs/interview-prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobTitle: job.title,
+          company: job.company,
+          snippet: job.snippet,
+          experienceRequired: job.experience_required,
+          tags: job.tags,
+        }),
+      })
+      const data = await res.json() as { questions?: InterviewQuestion[]; error?: string }
+      if (!res.ok || !data.questions) { setInterviewError(data.error ?? 'שגיאה בטעינת שאלות'); return }
+      setInterviewQuestions(data.questions)
+    } catch {
+      setInterviewError('שגיאת רשת — נסה שוב')
+    } finally {
+      setInterviewLoading(false)
+    }
   }
 
   const handleDelete = async () => {
@@ -361,6 +428,15 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
             {sendError && (
               <p className="text-xs text-destructive text-right max-w-[140px]">{sendError}</p>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="whitespace-nowrap text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+              onClick={openInterview}
+              title="שאלות לראיון עבודה"
+            >
+              <GraduationCap className="h-3.5 w-3.5 mr-1" /> Interview
+            </Button>
             <button
               onClick={handleDelete}
               disabled={deleting}
@@ -386,6 +462,103 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
           <Button className="flex-1" onClick={() => pickGender('male')}>זכר</Button>
           <Button className="flex-1" variant="outline" onClick={() => pickGender('female')}>נקבה</Button>
         </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={interviewOpen} onOpenChange={setInterviewOpen}>
+      <DialogContent showCloseButton className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <GraduationCap className="h-5 w-5 text-indigo-600" />
+            שאלות ראיון — {job.title}
+          </DialogTitle>
+          {job.company && <DialogDescription>{job.company}</DialogDescription>}
+        </DialogHeader>
+
+        {interviewLoading && (
+          <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> מכין שאלות מותאמות...
+          </div>
+        )}
+
+        {interviewError && (
+          <p className="text-sm text-destructive py-4 text-center">{interviewError}</p>
+        )}
+
+        {!interviewLoading && !interviewError && interviewQuestions.length > 0 && (
+          <div className="space-y-6 pt-1">
+            {interviewQuestions.map((q, idx) => {
+              const catColors: Record<string, string> = {
+                'טכני': 'text-blue-700 bg-blue-50 border-blue-200',
+                'התנהגותי': 'text-purple-700 bg-purple-50 border-purple-200',
+                'חברה': 'text-emerald-700 bg-emerald-50 border-emerald-200',
+              }
+              const fb = feedback[idx]
+              const scoreColor = !fb ? '' : fb.score >= 8 ? 'text-green-700 bg-green-50 border-green-300'
+                : fb.score >= 5 ? 'text-yellow-700 bg-yellow-50 border-yellow-300'
+                : 'text-red-700 bg-red-50 border-red-300'
+
+              return (
+                <div key={idx} className="border rounded-lg p-3 space-y-3">
+                  {/* Question */}
+                  <div className="flex items-start gap-2">
+                    <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${catColors[q.category]}`}>
+                      {q.category}
+                    </span>
+                    <p className="text-sm font-medium leading-snug">{q.question}</p>
+                  </div>
+
+                  {/* Answer textarea */}
+                  <Textarea
+                    placeholder="כתוב את תשובתך כאן..."
+                    className="text-sm min-h-[80px] resize-none"
+                    value={answers[idx] ?? ''}
+                    onChange={e => setAnswer(idx, e.target.value)}
+                    dir="rtl"
+                  />
+
+                  {/* Check button */}
+                  <div className="flex items-center justify-between gap-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+                      disabled={!answers[idx]?.trim() || fb?.loading}
+                      onClick={() => checkAnswer(idx)}
+                    >
+                      {fb?.loading
+                        ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> בודק...</>
+                        : <><Sparkles className="h-3.5 w-3.5 mr-1" /> בדוק תשובה</>
+                      }
+                    </Button>
+                    {fb && !fb.loading && fb.score > 0 && (
+                      <span className={`text-sm font-bold px-3 py-1 rounded-full border ${scoreColor}`}>
+                        {fb.score}/10
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Feedback */}
+                  {fb && !fb.loading && fb.score > 0 && (
+                    <div className="bg-muted/40 rounded-md p-3 space-y-2 text-sm" dir="rtl">
+                      <p className="text-muted-foreground leading-relaxed">{fb.analysis}</p>
+                      {fb.improvements?.length > 0 && (
+                        <ul className="space-y-1 pt-1">
+                          {fb.improvements.map((tip, ti) => (
+                            <li key={ti} className="flex items-start gap-1.5 text-xs text-indigo-700">
+                              <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                              {tip}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
     </>
