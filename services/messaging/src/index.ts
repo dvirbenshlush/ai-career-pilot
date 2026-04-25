@@ -35,10 +35,9 @@ app.post('/whatsapp/reset', async (_req, res) => {
 })
 
 app.post('/whatsapp/scan', async (req, res) => {
-  const { groupIds, userProfile, limit = 50 } = req.body as {
+  const { groupIds, userProfile } = req.body as {
     groupIds: string[]
     userProfile?: string
-    limit?: number
   }
 
   if (!Array.isArray(groupIds) || groupIds.length === 0) {
@@ -51,12 +50,20 @@ app.post('/whatsapp/scan', async (req, res) => {
   }
 
   try {
-    const msgs = fetchGroupMessages(groupIds, limit)
-    if (msgs.length === 0) {
-      return res.json({ jobs: [], messagesScanned: 0, candidatesFiltered: 0 })
+    const allJobs = []
+    let totalScanned = 0
+
+    // Process each group independently — 25 messages at a time
+    for (const gid of groupIds) {
+      const msgs = fetchGroupMessages([gid], 25)
+      if (msgs.length === 0) continue
+      totalScanned += msgs.length
+      console.log(`[scan] group ${gid}: ${msgs.length} msgs`)
+      const jobs = await parseJobMessages(msgs, userProfile)
+      allJobs.push(...jobs)
     }
-    const jobs = await parseJobMessages(msgs, userProfile)
-    return res.json({ jobs, messagesScanned: msgs.length })
+
+    return res.json({ jobs: allJobs, messagesScanned: totalScanned })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return res.status(500).json({ error: msg })

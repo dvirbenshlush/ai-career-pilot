@@ -8,28 +8,6 @@ function getGroq() {
   return _groq
 }
 
-// ── Pre-filter: keyword heuristic before spending Groq tokens ─────────────────
-const JOB_KEYWORDS = [
-  // Hebrew
-  'דרוש', 'דרושים', 'דרושה', 'משרה', 'משרות', 'מגייסים', 'מגייס', 'מגייסת',
-  'מחפשים', 'מחפש', 'מחפשת', 'קו"ח', 'קוח', 'ניסיון', 'תפקיד', 'שכר',
-  'לחברה', 'סניור', 'ג\'וניור', 'מפתח', 'מפתחת', 'מהנדס', 'מהנדסת',
-  'להצטרף', 'גיוס', 'ריאיון', 'ראיון', 'פרילנס', 'היברידי', 'מרחוק',
-  // English job terms
-  'hiring', 'we\'re looking', 'we are looking', 'job opening', 'job opportunity',
-  'position', 'developer', 'engineer', 'full stack', 'fullstack', 'frontend',
-  'backend', 'devops', 'qa ', 'product manager', 'data scientist',
-  'salary', 'remote', 'full-time', 'part-time', 'apply', 'cv ', 'resume',
-  // Signals
-  '₪', 'k/month', '/month', 'linkedin.com', 'glassdoor', 'jobs.', '/jobs',
-]
-
-export function looksLikeJob(text: string): boolean {
-  if (text.length < 80) return false                         // too short to be a job post
-  const lower = text.toLowerCase()
-  const hits = JOB_KEYWORDS.filter(kw => lower.includes(kw)).length
-  return hits >= 2                                           // require at least 2 signals
-}
 
 export interface ParsedJob {
   title: string
@@ -118,19 +96,14 @@ export async function parseJobMessages(
 ): Promise<ParsedJob[]> {
   if (messages.length === 0) return []
 
-  // Pre-filter with keyword heuristic — only send likely job postings to Groq
-  const candidates = messages.filter(m => looksLikeJob(m.text))
-  console.log(`[Groq] pre-filter: ${messages.length} → ${candidates.length} candidates`)
-  if (candidates.length === 0) return []
-
   const profileContext = userProfile
     ? `USER PROFILE: ${userProfile}\nScore each job 0-100 based on how well it matches this profile.`
     : 'Set match_score to 50 for all jobs (no profile provided).'
 
   const results: ParsedJob[] = []
 
-  for (let i = 0; i < candidates.length; i += CHUNK_SIZE) {
-    const chunk = candidates.slice(i, i + CHUNK_SIZE)
+  for (let i = 0; i < messages.length; i += CHUNK_SIZE) {
+    const chunk = messages.slice(i, i + CHUNK_SIZE)
     try {
       const jobs = await parseBatch(chunk, profileContext)
       results.push(...jobs)

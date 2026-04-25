@@ -177,7 +177,7 @@ export interface RawMessage {
   timestamp: number
 }
 
-export function fetchGroupMessages(groupIds: string[], limit = 50): RawMessage[] {
+export function fetchGroupMessages(groupIds: string[], limit = 25): RawMessage[] {
   if (state.status !== 'connected') throw new Error('WhatsApp not connected')
 
   const out: RawMessage[] = []
