@@ -6,10 +6,19 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog'
+import {
   Loader2, ExternalLink, MapPin, DollarSign, Wifi, Sparkles,
   Trash2, Search, RefreshCw, Building2, ChevronDown, ChevronUp,
   Briefcase, Mail, Phone, Send, User,
 } from 'lucide-react'
+
+type Gender = 'male' | 'female'
+
+function getStoredGender(): Gender | null {
+  try { return localStorage.getItem('userGender') as Gender | null } catch { return null }
+}
 
 interface SavedJob {
   id: string
@@ -108,15 +117,15 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
   const [expanded, setExpanded] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [genderPicker, setGenderPicker] = useState(false)
 
   const contactEmail = job.contact?.includes('@') ? job.contact.trim() : null
 
-  const handleSendCv = async () => {
-    if (!contactEmail) return
+  const doSend = async (gender: Gender) => {
     setSending(true)
     setSendError(null)
     try {
-      const res = await fetch('/api/jobs/send-cv', {
+      const res = await fetch('/api/jobs/send-cv-gmail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -125,26 +134,91 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
           contactEmail,
           snippet: job.snippet,
           experienceRequired: job.experience_required,
+          gender,
         }),
       })
-      if (!res.ok) {
-        const data = await res.json() as { error?: string }
+      const data = await res.json() as { ok?: boolean; gmailUrl?: string; needsAuth?: boolean; error?: string }
+
+      if (!res.ok || !data.ok) {
         setSendError(data.error ?? 'שגיאה בהכנת המייל')
         return
       }
-      // Trigger .eml download
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `apply-${job.company || 'job'}.eml`
-      a.click()
-      URL.revokeObjectURL(url)
+      window.open(data.gmailUrl, '_blank')
     } catch {
       setSendError('שגיאת רשת — נסה שוב')
     } finally {
       setSending(false)
     }
+  }
+
+  const startSendFlow = async (gender: Gender) => {
+    if (!contactEmail) return
+    setSendError(null)
+
+    const statusRes = await fetch('/api/gmail/status')
+    const status = await statusRes.json() as { connected: boolean }
+
+    if (!status.connected) {
+      const popup = window.open(
+        '/api/gmail/auth?returnTo=/jobs',
+        'gmail-auth',
+        'width=520,height=620,left=200,top=100'
+      )
+      if (!popup) {
+        setSendError('חסום popup — אפשר פופ-אפים לאתר זה')
+        return
+      }
+
+      setSending(true)
+      await new Promise<void>((resolve, reject) => {
+        const done = (err?: Error) => {
+          clearInterval(poll)
+          clearTimeout(timeout)
+          err ? reject(err) : resolve()
+        }
+
+        const timeout = setTimeout(() => done(new Error('פג זמן ההמתנה להתחברות')), 60_000)
+
+        const poll = setInterval(async () => {
+          try {
+            const r = await fetch('/api/gmail/status')
+            const s = await r.json() as { connected: boolean }
+            if (s.connected) { done(); return }
+          } catch { /* ignore transient network errors */ }
+
+          let isClosed = false
+          try { isClosed = popup.closed } catch { /* COOP — keep polling */ }
+          if (isClosed) {
+            await new Promise(r => setTimeout(r, 1200))
+            try {
+              const r = await fetch('/api/gmail/status')
+              const s = await r.json() as { connected: boolean }
+              if (s.connected) { done(); return }
+            } catch { /* ignore */ }
+            done(new Error('חלון ההתחברות נסגר ללא אימות'))
+          }
+        }, 1000)
+      }).catch(err => {
+        setSendError(err.message)
+        setSending(false)
+        throw err
+      })
+    }
+
+    await doSend(gender)
+  }
+
+  const handleSendCv = () => {
+    if (!contactEmail) return
+    const gender = getStoredGender()
+    if (!gender) { setGenderPicker(true); return }
+    startSendFlow(gender)
+  }
+
+  const pickGender = (gender: Gender) => {
+    try { localStorage.setItem('userGender', gender) } catch { /* ignore */ }
+    setGenderPicker(false)
+    startSendFlow(gender)
   }
 
   const handleDelete = async () => {
@@ -167,6 +241,7 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
   const hasFullText = fullText.length > 150
 
   return (
+    <>
     <Card className="hover:shadow-sm transition-shadow">
       <CardContent className="pt-4 pb-3">
         <div className="flex items-start justify-between gap-4">
@@ -298,6 +373,22 @@ function SavedJobCard({ job, onDelete }: { job: SavedJob; onDelete: (id: string)
         </div>
       </CardContent>
     </Card>
+
+    <Dialog open={genderPicker} onOpenChange={setGenderPicker}>
+      <DialogContent showCloseButton>
+        <DialogHeader>
+          <DialogTitle>ניסוח מכתב הכיסוי</DialogTitle>
+          <DialogDescription>
+            בחר מין כדי שהמכתב יהיה מנוסח בצורה הנכונה בעברית. ניתן לשנות בהמשך.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-3 pt-1">
+          <Button className="flex-1" onClick={() => pickGender('male')}>זכר</Button>
+          <Button className="flex-1" variant="outline" onClick={() => pickGender('female')}>נקבה</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 
