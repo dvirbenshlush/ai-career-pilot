@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
     botToken?: string
     channels?: string[]
     userProfile?: string
+    maxAgeDays?: number
   }
-  const { action, botToken, channels, userProfile } = body
+  const { action, botToken, channels, userProfile, maxAgeDays } = body
 
   if (action === 'validate') {
     const { text, status } = await proxyPost('/telegram/validate', { botToken })
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'scan') {
-    const { ok, status, text } = await proxyPost('/telegram/scan', { botToken, channels, userProfile })
+    const { ok, status, text } = await proxyPost('/telegram/scan', { botToken, channels, userProfile, maxAgeDays })
     if (!ok) return new NextResponse(text, { status, headers: { 'Content-Type': 'application/json' } })
 
     const data = JSON.parse(text) as { jobs: unknown[]; messagesScanned: number }

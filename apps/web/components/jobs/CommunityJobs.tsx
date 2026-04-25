@@ -575,6 +575,8 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
   const [scanning, setScanning] = useState(false)
   const [jobs, setJobs] = useState<ParsedJob[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [maxAgeDays, setMaxAgeDays] = useState(14)
 
   const handleValidate = async () => {
     if (!botToken) return
@@ -599,14 +601,14 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
 
   const handleScan = async () => {
     const channelList = channels.split(',').map(c => c.trim()).filter(Boolean)
-    if (!botToken || channelList.length === 0) return
+    if (channelList.length === 0) return
     setScanning(true)
     setError(null)
     try {
       const res = await fetch('/api/messaging/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'scan', botToken, channels: channelList, userProfile }),
+        body: JSON.stringify({ action: 'scan', botToken: botToken || undefined, channels: channelList, userProfile, maxAgeDays }),
       })
       const data = await res.json() as { jobs?: ParsedJob[]; error?: string }
       if (!res.ok) throw new Error(data.error ?? 'Scan failed')
@@ -627,49 +629,75 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
             Telegram Job Channels
           </CardTitle>
           <CardDescription>
-            Connect a Telegram bot that is a member of your job channels to extract postings
+            Enter public channel usernames to scan for job postings — no bot required
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs">Bot Token</Label>
-            <div className="flex gap-2">
-              <Input
-                type="password"
-                placeholder="123456:ABCdef..."
-                value={botToken}
-                onChange={e => setBotToken(e.target.value)}
-                className="flex-1"
-              />
-              <Button variant="outline" size="sm" onClick={handleValidate} disabled={!botToken || validating}>
-                {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify'}
-              </Button>
-            </div>
-            {botName && (
-              <p className="text-xs text-green-700 flex items-center gap-1">
-                <CheckCircle className="h-3.5 w-3.5" /> Connected as @{botName}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Create a bot via <span className="font-mono">@BotFather</span>, add it as admin to your job channels, then paste the token above.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">Channels / Groups to scan</Label>
+            <Label className="text-xs">Channels to scan</Label>
             <Input
-              placeholder="@jobsil, @devjobs_israel, @hitech_jobs"
+              placeholder="Israel_media_industry, devjobs_israel, hitech_jobs"
               value={channels}
               onChange={e => setChannels(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">Comma-separated channel usernames (with or without @)</p>
+            <p className="text-xs text-muted-foreground">Comma-separated usernames — with or without @ (public channels only)</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Scan messages from last</Label>
+            <div className="flex gap-2 items-center">
+              {[7, 14, 30].map(d => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setMaxAgeDays(d)}
+                  className={`px-3 py-1 rounded text-xs border transition-colors ${maxAgeDays === d ? 'bg-sky-500 text-white border-sky-500' : 'bg-background border-border hover:bg-muted'}`}
+                >
+                  {d} days
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+              onClick={() => setShowAdvanced(v => !v)}
+            >
+              {showAdvanced ? '▾' : '▸'} Private groups (Bot Token)
+            </button>
+            {showAdvanced && (
+              <div className="mt-2 space-y-1.5 pl-3 border-l border-border">
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    placeholder="123456:ABCdef..."
+                    value={botToken}
+                    onChange={e => setBotToken(e.target.value)}
+                    className="flex-1 text-xs"
+                  />
+                  <Button variant="outline" size="sm" onClick={handleValidate} disabled={!botToken || validating}>
+                    {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify'}
+                  </Button>
+                </div>
+                {botName && (
+                  <p className="text-xs text-green-700 flex items-center gap-1">
+                    <CheckCircle className="h-3.5 w-3.5" /> Connected as @{botName}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Required only for private groups. Create via <span className="font-mono">@BotFather</span> and add the bot as admin.
+                </p>
+              </div>
+            )}
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button
             className="w-full"
-            disabled={!botToken || !channels || scanning}
+            disabled={!channels || scanning}
             onClick={handleScan}
           >
             {scanning

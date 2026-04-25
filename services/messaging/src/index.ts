@@ -99,19 +99,19 @@ app.post('/telegram/validate', async (req, res) => {
 })
 
 app.post('/telegram/scan', async (req, res) => {
-  const { botToken, channels, userProfile } = req.body as {
-    botToken: string
+  const { botToken, channels, userProfile, maxAgeDays } = req.body as {
+    botToken?: string
     channels: string[]
     userProfile?: string
+    maxAgeDays?: number
   }
 
-  if (!botToken) return res.status(400).json({ error: 'botToken required' })
   if (!Array.isArray(channels) || channels.length === 0) {
     return res.status(400).json({ error: 'channels required' })
   }
 
   try {
-    const msgs = await fetchChannelMessages(botToken, channels) // default 3 days
+    const msgs = await fetchChannelMessages(botToken ?? '', channels, maxAgeDays ?? 14)
     const jobs = await parseJobMessages(
       msgs.map(m => ({ ...m, sender_name: m.sender_name ?? '' })),
       userProfile
