@@ -199,7 +199,10 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
     setScanInfo(null)
   }
 
-  const handleReset = async () => {
+  // Full reset — wipes session, shows new QR, WhatsApp re-sends history
+  // Only needed when you want to relink the device or fix a broken session
+  const handleRelinkDevice = async () => {
+    if (!confirm('פעולה זו תנתק את המכשיר ותבקש סריקת QR מחדש. להמשיך?')) return
     setError(null)
     setJobs([])
     setScanInfo(null)
@@ -212,6 +215,12 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
     setStatus(data.status)
     setQrBase64(data.qrBase64 ?? null)
     setGroups(data.groups ?? [])
+  }
+
+  // Refresh — re-scan selected groups from existing store (no disconnect)
+  const handleRefresh = () => {
+    if (selectedGroups.length === 0) return
+    handleScan()
   }
 
   const handleScan = async () => {
@@ -292,14 +301,16 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
             </div>
             {status === 'connected'
               ? (
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleReset}
-                    title="מוחק את הסשן הקיים ומציג QR חדש — WhatsApp ישלח היסטוריה מלאה"
+                    onClick={handleRefresh}
+                    disabled={selectedGroups.length === 0 || scanning}
+                    title="סורק מחדש את הקבוצות הנבחרות — ללא ניתוק"
                   >
-                    <RefreshCw className="h-3.5 w-3.5 mr-1" /> סנכרן היסטוריה
+                    <RefreshCw className={`h-3.5 w-3.5 mr-1 ${scanning ? 'animate-spin' : ''}`} />
+                    רענן
                   </Button>
                   <Button variant="ghost" size="sm" onClick={handleDisconnect} className="text-muted-foreground">
                     נתק
@@ -371,8 +382,8 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
               {/* Scan button */}
               <Button className="w-full" disabled={selectedGroups.length === 0 || scanning} onClick={handleScan}>
                 {scanning
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />מחלץ משרות מ-7 ימים אחרונים...</>
-                  : <><RefreshCw className="h-4 w-4 mr-2" />סרוק {selectedGroups.length} קבוצ{selectedGroups.length !== 1 ? 'ות' : 'ה'} (7 ימים אחרונים)</>
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />מחלץ משרות...</>
+                  : <><RefreshCw className="h-4 w-4 mr-2" />סרוק {selectedGroups.length} קבוצ{selectedGroups.length !== 1 ? 'ות' : 'ה'}</>
                 }
               </Button>
 
@@ -389,7 +400,7 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
                   )}
                   {scanInfo.messagesScanned === 0 && (
                     <span className="text-amber-600">
-                      — אין הודעות. לחץ <strong>סנכרן היסטוריה</strong> לסרוק QR מחדש — זה יגרום ל-WhatsApp לשלוח היסטוריה מלאה.
+                      — אין הודעות בקבוצות אלו עדיין.
                     </span>
                   )}
                 </div>
@@ -402,6 +413,18 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
+
+          {/* Relink device — hidden option for broken sessions */}
+          {status === 'connected' && (
+            <div className="border-t pt-3">
+              <button
+                onClick={handleRelinkDevice}
+                className="text-xs text-muted-foreground/50 hover:text-muted-foreground underline transition-colors"
+              >
+                בעיה בחיבור? קשר מכשיר מחדש (ידרוש סריקת QR חדשה)
+              </button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
