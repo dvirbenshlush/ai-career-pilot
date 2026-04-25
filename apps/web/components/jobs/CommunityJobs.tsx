@@ -373,7 +373,9 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
                     />
                     <span className="text-sm truncate flex-1">{g.name}</span>
                     {storeSummary[g.name] !== undefined && (
-                      <span className="text-xs text-muted-foreground/60 shrink-0">{storeSummary[g.name]} הודעות</span>
+                      <span className="text-xs text-muted-foreground/60 shrink-0" title="הודעות טקסט שנשמרו מהקבוצה">
+                        {storeSummary[g.name]} טקסטים
+                      </span>
                     )}
                   </label>
                 ))}

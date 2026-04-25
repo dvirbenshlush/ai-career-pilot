@@ -1,6 +1,6 @@
 import express from 'express'
 import cors from 'cors'
-import { connectWhatsApp, fetchGroupMessages, getWAState, disconnectWhatsApp, resetSession } from './whatsapp.js'
+import { connectWhatsApp, fetchGroupMessages, fetchGroupName, getWAState, disconnectWhatsApp, resetSession } from './whatsapp.js'
 import { fetchChannelMessages, validateBotToken } from './telegram.js'
 import { parseJobMessages } from './groq.js'
 
@@ -53,13 +53,17 @@ app.post('/whatsapp/scan', async (req, res) => {
     const allJobs = []
     let totalScanned = 0
 
-    // Process each group independently — 30 messages per group
+    // Process each group independently — all stored messages, capped at 100
     const scannedGroupNames: string[] = []
     for (const gid of groupIds) {
-      const msgs = fetchGroupMessages([gid], 30)
-      if (msgs.length === 0) continue
+      const msgs = fetchGroupMessages([gid], 100)
+      if (msgs.length === 0) {
+        // Still track name so stale DB entries get cleared
+        const name = fetchGroupName(gid)
+        if (name) scannedGroupNames.push(name)
+        continue
+      }
       totalScanned += msgs.length
-      // Collect the display name so the route knows which groups to overwrite
       const groupName = msgs[0]?.source_name
       if (groupName) scannedGroupNames.push(groupName)
       const jobs = await parseJobMessages(msgs, userProfile)

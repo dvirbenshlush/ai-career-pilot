@@ -27,11 +27,6 @@ export interface ParsedJob {
 
 const CHUNK_SIZE = 8   // fewer Groq calls — 8 msgs × ~400 chars ≈ 3200 input tokens, well under 12k TPM
 
-// Messages that are a bare URL with no surrounding text have no extractable job content
-function isUrlOnly(text: string): boolean {
-  return /^https?:\/\/\S+$/.test(text.trim())
-}
-
 function hasTitle(j: ParsedJob): boolean {
   const t = j.title?.trim().toLowerCase()
   return !!t && t !== 'unknown' && t !== 'לא ידוע' && t !== 'n/a'
@@ -111,9 +106,9 @@ export async function parseJobMessages(
   rawMessages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string }>,
   userProfile?: string
 ): Promise<ParsedJob[]> {
-  // Drop messages that are just a bare URL — nothing for Groq to extract
-  const messages = rawMessages.filter(m => !isUrlOnly(m.text))
+  const messages = rawMessages
   if (messages.length === 0) return []
+  console.log(`[Groq] parseJobMessages called with ${messages.length} messages`)
 
   const profileContext = userProfile
     ? `USER PROFILE: ${userProfile}\nScore each job 0-100 based on how well it matches this profile.`
