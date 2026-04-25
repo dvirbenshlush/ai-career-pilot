@@ -74,12 +74,28 @@ export async function POST(req: NextRequest) {
 
   const resume = resumes[0]
 
-  // Download the actual PDF from Supabase storage
-  const pdfRes = await fetch(resume.file_url)
-  if (!pdfRes.ok) {
-    return NextResponse.json({ error: 'Could not download resume file.' }, { status: 502 })
+  // Extract the storage path from the public URL and download via SDK
+  // URL format: .../storage/v1/object/public/resumes/<path>
+  let pdfBuffer: Buffer
+  try {
+    const urlPath = new URL(resume.file_url).pathname
+    const bucketPrefix = '/storage/v1/object/public/resumes/'
+    const storagePath = urlPath.includes(bucketPrefix)
+      ? urlPath.slice(urlPath.indexOf(bucketPrefix) + bucketPrefix.length)
+      : urlPath.split('/resumes/')[1] ?? ''
+
+    if (!storagePath) throw new Error('Cannot parse storage path from URL')
+
+    const { data: fileData, error: dlErr } = await supabase.storage
+      .from('resumes')
+      .download(decodeURIComponent(storagePath))
+
+    if (dlErr || !fileData) throw dlErr ?? new Error('Empty file')
+    pdfBuffer = Buffer.from(await fileData.arrayBuffer())
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: `Could not download resume file: ${msg}` }, { status: 502 })
   }
-  const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer())
 
   // Generate a short personalized cover letter
   const coverLetterResult = await groqChat({
