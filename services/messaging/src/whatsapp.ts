@@ -16,8 +16,9 @@ import { rm, readFile, writeFile, mkdir } from 'fs/promises'
 import pino from 'pino'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const AUTH_DIR = path.join(__dirname, '..', 'auth_info', 'whatsapp')
-const STORE_FILE = path.join(__dirname, '..', 'auth_info', 'msg_store.json')
+const DATA_DIR = process.env.DATA_DIR ?? path.join(__dirname, '..', 'auth_info')
+const AUTH_DIR = path.join(DATA_DIR, 'whatsapp')
+const STORE_FILE = path.join(DATA_DIR, 'msg_store.json')
 const logger = pino({ level: 'silent' })
 
 // ── Message store — persisted to disk ─────────────────────────────────────────
