@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
     } else {
       // PDF: extract text using pdf-parse
       try {
-        const pdfParse = await import('pdf-parse').then(m => m.default ?? m)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pdfParse = ((await import('pdf-parse' as any)) as any).default
         const result = await pdfParse(buffer)
         parsedText = result.text.trim()
       } catch {
