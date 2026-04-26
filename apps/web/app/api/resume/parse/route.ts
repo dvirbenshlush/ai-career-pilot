@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import mammoth from 'mammoth'
 
@@ -49,18 +49,13 @@ export async function POST(request: NextRequest) {
       const result = await mammoth.extractRawText({ buffer })
       parsedText = result.value.trim()
     } else {
-      // PDF: extract text using pdf-parse if available, otherwise use base64 hint
-      // Dynamically import to avoid build issues
+      // PDF: extract text using pdf-parse
       try {
-        // Import the internal module directly — the main pdf-parse entry point reads
-        // test files from disk at load time which crashes the Next.js build.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pdfParse = (await import('pdf-parse/lib/pdf-parse.js' as any)).default
+        const { default: pdfParse } = await import('pdf-parse')
         const result = await pdfParse(buffer)
         parsedText = result.text.trim()
       } catch {
-        // pdf-parse not installed — fall back to raw buffer text extraction
-        parsedText = buffer.toString('utf-8').replace(/[^\x20-\x7E\u0590-\u05FF\n\r\t ]/g, ' ').replace(/\s+/g, ' ').trim()
+        parsedText = buffer.toString('utf-8').replace(/[^\x20-\x7E֐-׿\n\r\t ]/g, ' ').replace(/\s+/g, ' ').trim()
       }
     }
   } catch (e: unknown) {
