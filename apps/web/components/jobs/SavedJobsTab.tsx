@@ -425,7 +425,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
     <>
     <Card className="hover:shadow-sm transition-shadow">
       <CardContent className="pt-4 pb-3">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="flex-1 min-w-0">
 
             {/* Title row */}
@@ -520,7 +520,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col items-end gap-2 shrink-0">
+          <div className="flex flex-row sm:flex-col items-start sm:items-end gap-2 shrink-0 flex-wrap">
             {job.url ? (
               <a href={job.url} target="_blank" rel="noopener noreferrer">
                 <Button size="sm" className="whitespace-nowrap">
@@ -792,8 +792,8 @@ export function SavedJobsTab() {
   return (
     <div className="space-y-3">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-48">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="relative w-full sm:flex-1 sm:min-w-48">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="חפש לפי תפקיד, חברה, טכנולוגיה..."
@@ -803,41 +803,43 @@ export function SavedJobsTab() {
           />
         </div>
 
-        <select
-          value={sourceFilter}
-          onChange={e => setSourceFilter(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={sourceFilter}
+            onChange={e => setSourceFilter(e.target.value)}
+            className="h-9 flex-1 min-w-[100px] rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
 
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {STATUS_FILTER_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="h-9 flex-1 min-w-[100px] rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {STATUS_FILTER_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
 
-        <select
-          value={sortField}
-          onChange={e => setSortField(e.target.value as SortField)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {SORT_FIELDS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
+          <select
+            value={sortField}
+            onChange={e => setSortField(e.target.value as SortField)}
+            className="h-9 flex-1 min-w-[100px] rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {SORT_FIELDS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
 
-        <select
-          value={sortDir}
-          onChange={e => setSortDir(e.target.value as SortDir)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {SORT_DIR.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
+          <select
+            value={sortDir}
+            onChange={e => setSortDir(e.target.value as SortDir)}
+            className="h-9 flex-1 min-w-[80px] rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {SORT_DIR.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
 
-        <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
+          <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

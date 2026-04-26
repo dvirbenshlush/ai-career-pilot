@@ -62,7 +62,7 @@ export function CalendarPageClient({ applications }: { applications: Application
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-4">
       {COLUMNS.map(col => (
         <div key={col.status} className="space-y-3">
           <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${col.bg}`}>

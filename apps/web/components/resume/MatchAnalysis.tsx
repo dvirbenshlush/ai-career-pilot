@@ -257,7 +257,7 @@ export function MatchAnalysis({ resumeId }: MatchAnalysisProps) {
           <CardDescription>Paste a job description to get your match score and tailored suggestions</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="job-title">Job Title</Label>
               <Input id="job-title" placeholder="e.g. Senior Frontend Engineer" value={jobTitle} onChange={e => setJobTitle(e.target.value)} />
@@ -267,7 +267,7 @@ export function MatchAnalysis({ resumeId }: MatchAnalysisProps) {
               <Input id="company" placeholder="e.g. Stripe" value={company} onChange={e => setCompany(e.target.value)} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="job-url">Job URL (optional)</Label>
               <Input id="job-url" placeholder="https://..." value={jobUrl} onChange={e => setJobUrl(e.target.value)} />
@@ -284,7 +284,7 @@ export function MatchAnalysis({ resumeId }: MatchAnalysisProps) {
             <Textarea
               id="job-desc"
               placeholder="Paste the full job description here..."
-              className="min-h-[200px]"
+              className="min-h-[120px] sm:min-h-[200px]"
               value={jobDescription}
               onChange={e => setJobDescription(e.target.value)}
             />

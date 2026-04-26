@@ -300,12 +300,13 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
       .finally(() => setPreviewLoading(false))
   }, [hoveredGroup])
 
-  const TOOLTIP_W = 320
+  const TOOLTIP_W = Math.min(320, window.innerWidth - 24)
   const showTooltip = (e: React.MouseEvent<HTMLLabelElement>, id: string) => {
     if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null }
     const rect = e.currentTarget.getBoundingClientRect()
     const spaceRight = window.innerWidth - rect.right
-    const left = spaceRight >= TOOLTIP_W + 12 ? rect.right + 8 : rect.left - TOOLTIP_W - 8
+    let left = spaceRight >= TOOLTIP_W + 12 ? rect.right + 8 : rect.left - TOOLTIP_W - 8
+    left = Math.max(8, Math.min(left, window.innerWidth - TOOLTIP_W - 8))
     setTooltipPos({ top: rect.top, left })
     setHoveredGroup(id)
   }

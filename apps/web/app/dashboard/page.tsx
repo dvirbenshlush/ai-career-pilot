@@ -58,7 +58,7 @@ export default async function DashboardPage() {
   return (
     <div className="container max-w-5xl mx-auto py-8 px-4">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">AI Career Pilot</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">AI Career Pilot</h1>
         <p className="text-muted-foreground mt-1">Your autonomous job search command center</p>
       </div>
 

@@ -285,19 +285,19 @@ export function JobsPageClient({ savedJobs, resumeId, linkedinProfile }: { saved
         <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-10 gap-0">
           <TabsTrigger
             value="saved"
-            className="flex items-center gap-1.5 px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
+            className="flex items-center gap-1.5 px-3 sm:px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
           >
             <Bookmark className="h-3.5 w-3.5" /> המשרות שלי
           </TabsTrigger>
           <TabsTrigger
             value="scrape"
-            className="flex items-center gap-1.5 px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
+            className="flex items-center gap-1.5 px-3 sm:px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
           >
             <MessageCircle className="h-3.5 w-3.5" /> גירוד משרות
           </TabsTrigger>
           <TabsTrigger
             value="search"
-            className="flex items-center gap-1.5 px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
+            className="flex items-center gap-1.5 px-3 sm:px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
           >
             <Search className="h-3.5 w-3.5" /> חיפוש AI
           </TabsTrigger>
