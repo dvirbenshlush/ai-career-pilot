@@ -152,7 +152,10 @@ $('btn-send-cv').addEventListener('click', async () => {
   })
 
   if (sendRes?.data?.needsAuth) {
-    setStatus('צריך לחבר Gmail — פתח את האתר תחילה', 'error')
+    setStatus('מחבר Gmail...', 'loading')
+    // Open Gmail OAuth flow in the browser — tokens saved to DB after completion
+    chrome.tabs.create({ url: `${API_BASE}/api/gmail/auth?returnTo=/jobs` })
+    setStatus('✅ חבר Gmail בחלון שנפתח, ואז נסה שוב', 'success')
     $('btn-send-cv').disabled = false
     return
   }
