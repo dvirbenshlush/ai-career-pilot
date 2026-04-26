@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { broadcastJobsToAllUsers } from '@/lib/jobs/broadcastJobs'
 
 const MESSAGING_URL = process.env.MESSAGING_SERVICE_URL ?? 'http://localhost:3001'
 
@@ -107,6 +108,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ...data, dbError: insertErr.message }, { status })
           }
           console.log(`[Telegram] saved ${newJobs.length} new jobs (${validJobs.length - newJobs.length} duplicates skipped)`)
+          broadcastJobsToAllUsers(user.id, rows).catch(e => console.error('[Telegram] broadcast error:', e))
         }
       }
     } catch (e) { console.error('[Telegram] save error:', e) }

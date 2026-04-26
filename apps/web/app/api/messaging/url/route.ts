@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { broadcastJobsToAllUsers } from '@/lib/jobs/broadcastJobs'
 
 const MESSAGING_URL = process.env.MESSAGING_SERVICE_URL ?? 'http://localhost:3001'
 
@@ -92,7 +93,10 @@ export async function POST(req: NextRequest) {
         .from('job_opportunities')
         .upsert(rows, { onConflict: 'user_id,message_fingerprint', ignoreDuplicates: true })
       if (insertErr) console.error('[URL] insert error:', insertErr.message)
-      else console.log(`[URL] saved ${newJobs.length} new jobs`)
+      else {
+        console.log(`[URL] saved ${newJobs.length} new jobs`)
+        broadcastJobsToAllUsers(user.id, rows).catch(e => console.error('[URL] broadcast error:', e))
+      }
     }
   }
 

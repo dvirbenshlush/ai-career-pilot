@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { broadcastJobsToAllUsers } from '@/lib/jobs/broadcastJobs'
 
 const MESSAGING_URL = process.env.MESSAGING_SERVICE_URL ?? 'http://localhost:3001'
 
@@ -131,6 +132,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ...data, dbError: insertErr.message }, { status })
           }
           console.log(`[WhatsApp] +${newJobs.length} new jobs saved (${validJobs.length - newJobs.length} already in DB)`)
+          broadcastJobsToAllUsers(user.id, rows).catch(e => console.error('[WhatsApp] broadcast error:', e))
         } else {
           console.log(`[WhatsApp] all ${validJobs.length} jobs already in DB — nothing new`)
         }
