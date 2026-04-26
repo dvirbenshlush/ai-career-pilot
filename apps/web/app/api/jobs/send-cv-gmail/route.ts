@@ -86,9 +86,14 @@ function buildMime(params: {
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { resolveUser } = await import('@/lib/extension/auth')
+  const { createAdminClient } = await import('@/lib/supabase/admin')
+
+  const resolved = await resolveUser(req)
+  if (!resolved) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const supabase = createAdminClient()
+  const user = { id: resolved.id }
 
   const { jobTitle, company, contactEmail, snippet, experienceRequired, gender } = await req.json() as {
     jobTitle: string

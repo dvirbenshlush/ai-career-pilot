@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Career Pilot</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Header -->
+    <header>
+      <div class="logo">🚀 AI Career Pilot</div>
+      <button id="btn-logout" class="btn-icon" title="התנתק" style="display:none">✕</button>
+    </header>
+
+    <!-- Screen: not connected -->
+    <div id="screen-auth" class="screen">
+      <p class="hint">התחבר לחשבון שלך כדי לשלוח קו"ח ולהכין לראיון ישירות מכאן</p>
+      <button id="btn-connect" class="btn btn-primary">🔗 התחבר לאתר</button>
+    </div>
+
+    <!-- Screen: main -->
+    <div id="screen-main" class="screen" style="display:none">
+
+      <div class="section">
+        <label>תיאור המשרה</label>
+        <textarea id="job-text" rows="5" placeholder="הדבק את תיאור המשרה כאן..."></textarea>
+        <button id="btn-read-page" class="btn btn-secondary btn-sm">📄 קרא מהדף הנוכחי</button>
+      </div>
+
+      <div class="section">
+        <label>מייל ליצירת קשר</label>
+        <input id="contact-email" type="email" placeholder="hr@company.com" />
+      </div>
+
+      <div class="section">
+        <label>מגדר לניסוח מכתב</label>
+        <div class="gender-row">
+          <button class="btn btn-gender" data-gender="male">👨 זכר</button>
+          <button class="btn btn-gender" data-gender="female">👩 נקבה</button>
+        </div>
+      </div>
+
+      <div id="status" class="status" style="display:none"></div>
+
+      <div class="actions">
+        <button id="btn-send-cv" class="btn btn-primary" disabled>📤 שלח קו"ח</button>
+        <button id="btn-interview" class="btn btn-secondary">🎓 הכן לראיון</button>
+      </div>
+
+    </div>
+
+    <!-- Screen: interview questions -->
+    <div id="screen-interview" class="screen" style="display:none">
+      <button id="btn-back" class="btn btn-secondary btn-sm">← חזור</button>
+      <div id="interview-content"></div>
+    </div>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
