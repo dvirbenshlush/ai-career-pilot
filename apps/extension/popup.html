@@ -49,7 +49,21 @@
         <button id="btn-send-cv" class="btn btn-primary" disabled>📤 שלח קו"ח</button>
         <button id="btn-interview" class="btn btn-secondary">🎓 הכן לראיון</button>
       </div>
+      <button id="btn-tailor" class="btn btn-tailor" disabled>✨ התאם קו"ח למשרה</button>
 
+    </div>
+
+    <!-- Screen: tailored resume -->
+    <div id="screen-tailor" class="screen" style="display:none">
+      <button id="btn-back-tailor" class="btn btn-secondary btn-sm">← חזור</button>
+      <div id="tailor-status" class="status" style="display:none"></div>
+      <div id="tailor-content" style="display:none">
+        <div class="tailor-actions">
+          <button id="btn-open-doc" class="btn btn-primary">📄 פתח ב-Google Docs</button>
+          <button id="btn-copy-resume" class="btn btn-secondary">📋 העתק טקסט</button>
+        </div>
+        <pre id="tailor-text" class="resume-preview"></pre>
+      </div>
     </div>
 
     <!-- Screen: interview questions -->

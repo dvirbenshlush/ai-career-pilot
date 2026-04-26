@@ -117,6 +117,32 @@ textarea:focus, input:focus { outline: 2px solid #6366f1; border-color: transpar
 }
 .q-text { font-size: 13px; color: #111; line-height: 1.5; }
 
+.btn-tailor {
+  width: 100%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  border: none;
+  margin-top: -4px;
+}
+.btn-tailor:hover:not(:disabled) { opacity: .9; }
+
+.tailor-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+.tailor-actions .btn { flex: 1; font-size: 12px; padding: 7px 8px; }
+
+.resume-preview {
+  white-space: pre-wrap;
+  font-size: 11px;
+  font-family: inherit;
+  color: #374151;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
 .spinner::after {
   content: '';
   display: inline-block;

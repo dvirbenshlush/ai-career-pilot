@@ -32,6 +32,7 @@ function updateSendButton() {
   const hasGender = !!selectedGender
   const hasText = $('job-text').value.trim().length > 10
   $('btn-send-cv').disabled = !(hasEmail && hasGender && hasText)
+  $('btn-tailor').disabled = !hasText
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -202,6 +203,66 @@ $('btn-interview').addEventListener('click', async () => {
 })
 
 $('btn-back').addEventListener('click', () => showScreen('screen-main'))
+$('btn-back-tailor').addEventListener('click', () => showScreen('screen-main'))
+
+// ── Tailor resume ─────────────────────────────────────────────────────────────
+
+let tailoredDocUrl = null
+
+$('btn-tailor').addEventListener('click', async () => {
+  const jobText = $('job-text').value.trim()
+  if (!jobText) return
+
+  showScreen('screen-tailor')
+  $('tailor-content').style.display = 'none'
+  $('tailor-status').style.display = 'block'
+  $('tailor-status').className = 'status loading spinner'
+  $('tailor-status').textContent = 'מייצר קו"ח מותאם...'
+
+  const lines = jobText.split('\n').filter(l => l.trim())
+  const jobTitle = lines[0]?.slice(0, 80) ?? 'משרה'
+
+  const res = await apiCall('/api/jobs/tailor-resume', {
+    jobTitle,
+    jobDescription: jobText,
+  })
+
+  if (res?.data?.needsAuth) {
+    $('tailor-status').className = 'status error'
+    $('tailor-status').textContent = 'חבר Gmail קודם כדי לשמור ב-Google Docs'
+    chrome.tabs.create({ url: `${API_BASE}/api/gmail/auth?returnTo=/jobs` })
+    return
+  }
+
+  if (!res?.ok || !res.data?.tailoredText) {
+    $('tailor-status').className = 'status error'
+    $('tailor-status').textContent = res?.data?.error ?? 'שגיאה ביצירת קו"ח'
+    return
+  }
+
+  tailoredDocUrl = res.data.docUrl ?? null
+  $('tailor-text').textContent = res.data.tailoredText
+  $('tailor-status').style.display = 'none'
+  $('tailor-content').style.display = 'block'
+
+  if (tailoredDocUrl) {
+    $('btn-open-doc').style.display = 'block'
+    $('btn-open-doc').textContent = '📄 פתח ב-Google Docs'
+  } else {
+    $('btn-open-doc').style.display = 'none'
+  }
+})
+
+$('btn-open-doc').addEventListener('click', () => {
+  if (tailoredDocUrl) chrome.tabs.create({ url: tailoredDocUrl })
+})
+
+$('btn-copy-resume').addEventListener('click', async () => {
+  const text = $('tailor-text').textContent
+  await navigator.clipboard.writeText(text)
+  $('btn-copy-resume').textContent = '✅ הועתק!'
+  setTimeout(() => { $('btn-copy-resume').textContent = '📋 העתק טקסט' }, 2000)
+})
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 

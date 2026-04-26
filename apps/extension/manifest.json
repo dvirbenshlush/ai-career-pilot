@@ -17,7 +17,7 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "activeTab", "tabs"],
+  "permissions": ["storage", "activeTab", "tabs", "clipboardWrite"],
   "externally_connectable": {
     "matches": ["https://ai-career-pilot-web.vercel.app/*"]
   },
