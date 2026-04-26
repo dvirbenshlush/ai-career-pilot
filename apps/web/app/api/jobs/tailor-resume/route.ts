@@ -41,30 +41,36 @@ export async function POST(req: NextRequest) {
   const user = await resolveUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { jobTitle, company, jobDescription } = await req.json() as {
+  const { jobTitle, company, jobDescription, resumeText: resumeTextInput } = await req.json() as {
     jobTitle?: string
     company?: string
     jobDescription: string
+    resumeText?: string
   }
 
   if (!jobDescription?.trim()) {
     return NextResponse.json({ error: 'jobDescription required' }, { status: 400 })
   }
 
-  // Fetch user's resume
-  const admin = createAdminClient()
-  const { data: resumes } = await admin
-    .from('resumes')
-    .select('parsed_text, file_name')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
+  let resumeText = resumeTextInput?.trim() ?? ''
 
-  if (!resumes?.length || !resumes[0].parsed_text) {
-    return NextResponse.json({ error: 'לא נמצא קו"ח. העלה קו"ח תחילה באתר.' }, { status: 404 })
+  if (!resumeText) {
+    // Try fetching from DB
+    const admin = createAdminClient()
+    const { data: resumes } = await admin
+      .from('resumes')
+      .select('parsed_text, file_name')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (!resumes?.length || !resumes[0].parsed_text) {
+      return NextResponse.json({ error: 'noResume' }, { status: 404 })
+    }
+    resumeText = resumes[0].parsed_text
   }
 
-  const resumeText = anonymize(resumes[0].parsed_text.slice(0, 3000)).text
+  resumeText = anonymize(resumeText.slice(0, 3000)).text
 
   // Generate tailored resume via Groq
   const result = await groqChat({

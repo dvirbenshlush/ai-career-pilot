@@ -203,13 +203,13 @@ $('btn-interview').addEventListener('click', async () => {
 })
 
 $('btn-back').addEventListener('click', () => showScreen('screen-main'))
-$('btn-back-tailor').addEventListener('click', () => showScreen('screen-main'))
+$('btn-back-paste').addEventListener('click', () => showScreen('screen-main'))
 
 // ── Tailor resume ─────────────────────────────────────────────────────────────
 
 let tailoredDocUrl = null
 
-$('btn-tailor').addEventListener('click', async () => {
+async function runTailor(resumeText = '') {
   const jobText = $('job-text').value.trim()
   if (!jobText) return
 
@@ -222,10 +222,15 @@ $('btn-tailor').addEventListener('click', async () => {
   const lines = jobText.split('\n').filter(l => l.trim())
   const jobTitle = lines[0]?.slice(0, 80) ?? 'משרה'
 
-  const res = await apiCall('/api/jobs/tailor-resume', {
-    jobTitle,
-    jobDescription: jobText,
-  })
+  const body = { jobTitle, jobDescription: jobText }
+  if (resumeText) body.resumeText = resumeText
+
+  const res = await apiCall('/api/jobs/tailor-resume', body)
+
+  if (res?.data?.error === 'noResume' || res?.status === 404) {
+    showScreen('screen-paste-resume')
+    return
+  }
 
   if (res?.data?.needsAuth) {
     $('tailor-status').className = 'status error'
@@ -251,6 +256,14 @@ $('btn-tailor').addEventListener('click', async () => {
   } else {
     $('btn-open-doc').style.display = 'none'
   }
+}
+
+$('btn-tailor').addEventListener('click', () => runTailor())
+
+$('btn-tailor-with-text').addEventListener('click', () => {
+  const resumeText = $('resume-text-input').value.trim()
+  if (!resumeText) return
+  runTailor(resumeText)
 })
 
 $('btn-open-doc').addEventListener('click', () => {
