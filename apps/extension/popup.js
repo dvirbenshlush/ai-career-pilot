@@ -33,6 +33,7 @@ function updateSendButton() {
   const hasText = $('job-text').value.trim().length > 10
   $('btn-send-cv').disabled = !(hasEmail && hasGender && hasText)
   $('btn-tailor').disabled = !hasText
+  $('btn-save-applied').disabled = !hasText
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -275,6 +276,42 @@ $('btn-copy-resume').addEventListener('click', async () => {
   await navigator.clipboard.writeText(text)
   $('btn-copy-resume').textContent = '✅ הועתק!'
   setTimeout(() => { $('btn-copy-resume').textContent = '📋 העתק טקסט' }, 2000)
+})
+
+// ── Save as applied ───────────────────────────────────────────────────────────
+
+$('btn-save-applied').addEventListener('click', async () => {
+  const jobText = $('job-text').value.trim()
+  if (!jobText) return
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  const currentUrl = tab?.url ?? ''
+
+  const lines = jobText.split('\n').filter(l => l.trim())
+  const jobTitle = lines[0]?.slice(0, 80) ?? 'משרה'
+
+  $('btn-save-applied').disabled = true
+  $('btn-save-applied').textContent = '⏳ שומר...'
+
+  const res = await apiCall('/api/jobs/apply', {
+    title: jobTitle,
+    snippet: jobText.slice(0, 300),
+    url: currentUrl.startsWith('http') ? currentUrl : '',
+  })
+
+  if (res?.ok) {
+    $('btn-save-applied').textContent = '✅ נשמר!'
+    setTimeout(() => {
+      $('btn-save-applied').textContent = '📌 שמור כהגשה'
+      updateSendButton()
+    }, 2500)
+  } else {
+    $('btn-save-applied').textContent = '❌ שגיאה'
+    setTimeout(() => {
+      $('btn-save-applied').textContent = '📌 שמור כהגשה'
+      updateSendButton()
+    }, 2500)
+  }
 })
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
