@@ -15,6 +15,10 @@ export async function POST(req: NextRequest) {
 
   if (!title?.trim()) return NextResponse.json({ error: 'title required' }, { status: 400 })
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }, { status: 500 })
+  }
+
   const admin = createAdminClient()
   const fp = (snippet || title).slice(0, 300).trim()
 
