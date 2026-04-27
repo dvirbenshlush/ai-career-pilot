@@ -88,11 +88,12 @@ async function tryReadPage() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
     if (!tab?.id) return
+    if (!tab.url?.startsWith('http')) return  // skip chrome:// and other internal pages
 
     chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' }, response => {
       if (chrome.runtime.lastError || !response) return
-      if (response.text) $('job-text').value = response.text.slice(0, 3000)
-      if (response.emails?.length) $('contact-email').value = response.emails[0]
+      if (response.text && !$('job-text').value) $('job-text').value = response.text.slice(0, 3000)
+      if (response.emails?.length && !$('contact-email').value) $('contact-email').value = response.emails[0]
       updateSendButton()
     })
   } catch { /* tab might not support content scripts */ }
@@ -301,16 +302,16 @@ $('btn-save-applied').addEventListener('click', async () => {
 
   if (res?.ok) {
     $('btn-save-applied').textContent = '✅ נשמר!'
+    setStatus('✅ המשרה נשמרה עם סטטוס "הוגש"', 'success')
     setTimeout(() => {
       $('btn-save-applied').textContent = '📌 שמור כהגשה'
       updateSendButton()
-    }, 2500)
+    }, 3000)
   } else {
-    $('btn-save-applied').textContent = '❌ שגיאה'
-    setTimeout(() => {
-      $('btn-save-applied').textContent = '📌 שמור כהגשה'
-      updateSendButton()
-    }, 2500)
+    const errMsg = res?.data?.error ?? res?.error ?? `שגיאה (${res?.status ?? 'network'})`
+    $('btn-save-applied').textContent = '📌 שמור כהגשה'
+    setStatus(`❌ ${errMsg}`, 'error')
+    updateSendButton()
   }
 })
 
