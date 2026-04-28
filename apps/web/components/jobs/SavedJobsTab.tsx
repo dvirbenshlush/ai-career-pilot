@@ -219,6 +219,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   const [tailoredText, setTailoredText] = useState<string | null>(null)
   const [tailorDocUrl, setTailorDocUrl] = useState<string | null>(null)
   const [tailorError, setTailorError] = useState<string | null>(null)
+  const [tailorNeedResume, setTailorNeedResume] = useState(false)
   const [interviewOpen, setInterviewOpen] = useState(false)
   const [interviewLoading, setInterviewLoading] = useState(false)
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
@@ -264,7 +265,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   })()
   const contactEmail = extractedEmail
 
-  const doSend = async (gender: Gender, language: 'he' | 'en', tailoredPdfB64?: string | null) => {
+  const doSend = async (gender: Gender, language: 'he' | 'en', tailoredPdfB64?: string | null, tailoredTextArg?: string | null) => {
     setSending(true)
     setSendError(null)
     try {
@@ -278,6 +279,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
         language,
       }
       if (tailoredPdfB64) body.tailoredPdfB64 = tailoredPdfB64
+      else if (tailoredTextArg) body.tailoredText = tailoredTextArg
       const res = await fetch('/api/jobs/send-cv-gmail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -323,7 +325,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
     }
   }
 
-  const startSendFlow = async (gender: Gender, language: 'he' | 'en' = 'he', tailoredPdfB64?: string | null) => {
+  const startSendFlow = async (gender: Gender, language: 'he' | 'en' = 'he', tailoredPdfB64?: string | null, tailoredTextArg?: string | null) => {
     if (!contactEmail) return
     setSendError(null)
 
@@ -379,7 +381,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
       })
     }
 
-    await doSend(gender, language, tailoredPdfB64)
+    await doSend(gender, language, tailoredPdfB64, tailoredTextArg)
   }
 
   const openCvDialog = () => {
@@ -389,6 +391,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
     setTailoredText(null)
     setTailorDocUrl(null)
     setTailorError(null)
+    setTailorNeedResume(false)
     setCvDialogOpen(true)
   }
 
@@ -408,6 +411,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   const generateTailored = async () => {
     setTailoring(true)
     setTailorError(null)
+    setTailorNeedResume(false)
     setTailoredPdf(null)
     setTailoredText(null)
     setTailorDocUrl(null)
@@ -423,7 +427,14 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
         }),
       })
       const data = await res.json() as { tailoredText?: string; pdfBase64?: string; docUrl?: string; error?: string }
-      if (!res.ok || !data.tailoredText) { setTailorError(data.error ?? 'שגיאה ביצירת קורות חיים'); return }
+      if (!res.ok || !data.tailoredText) {
+        const errMsg = data.error === 'noResume'
+          ? 'לא נמצאו קורות חיים שמורים. עלייך להעלות קורות חיים תחילה.'
+          : (data.error ?? 'שגיאה ביצירת קורות חיים')
+        setTailorError(errMsg)
+        if (data.error === 'noResume') setTailorNeedResume(true)
+        return
+      }
       setTailoredText(data.tailoredText)
       setTailoredPdf(data.pdfBase64 ?? null)
       setTailorDocUrl(data.docUrl ?? null)
@@ -450,7 +461,11 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
     const gender = getStoredGender()
     if (!gender) return
     setCvDialogOpen(false)
-    await startSendFlow(gender, sendLang, cvType === 'tailored' ? tailoredPdf : null)
+    await startSendFlow(
+      gender, sendLang,
+      cvType === 'tailored' ? tailoredPdf : null,
+      cvType === 'tailored' ? tailoredText : null,
+    )
   }
 
   const openInterview = async () => {
@@ -711,7 +726,16 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
             </div>
           </div>
 
-          {tailorError && <p className="text-sm text-destructive">{tailorError}</p>}
+          {tailorError && (
+            <div className="space-y-1">
+              <p className="text-sm text-destructive">{tailorError}</p>
+              {tailorNeedResume && (
+                <a href="/resume" target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 underline hover:text-indigo-800">
+                  → מעבר לעמוד קורות החיים להעלאה
+                </a>
+              )}
+            </div>
+          )}
 
           {/* Tailored preview */}
           {tailoredText && (
@@ -740,7 +764,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
           )}
 
           {/* Action */}
-          {cvType === 'tailored' && !tailoredPdf ? (
+          {cvType === 'tailored' && !tailoredText ? (
             <Button
               className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white"
               disabled={tailoring}

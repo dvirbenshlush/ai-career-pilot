@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
 
   const {
     jobTitle, company, contactEmail, snippet, experienceRequired,
-    gender, language = 'he', tailoredPdfB64,
+    gender, language = 'he', tailoredPdfB64, tailoredText,
   } = await req.json() as {
     jobTitle: string
     company: string
@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
     gender?: 'male' | 'female'
     language?: 'he' | 'en'
     tailoredPdfB64?: string
+    tailoredText?: string
   }
 
   if (!contactEmail?.includes('@')) {
@@ -122,6 +123,16 @@ export async function POST(req: NextRequest) {
 
   if (tailoredPdfB64) {
     pdfBuffer = Buffer.from(tailoredPdfB64, 'base64')
+    pdfFileName = language === 'en' ? 'tailored-cv.pdf' : 'קורות-חיים-מותאמים.pdf'
+  } else if (tailoredText) {
+    // PDF generation failed client-side — regenerate from text here
+    try {
+      const { textToPdf } = await import('@/lib/pdf')
+      pdfBuffer = await textToPdf(tailoredText)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return NextResponse.json({ error: `Could not generate PDF: ${msg}` }, { status: 502 })
+    }
     pdfFileName = language === 'en' ? 'tailored-cv.pdf' : 'קורות-חיים-מותאמים.pdf'
   } else {
     const { data: resumes } = await supabase
