@@ -981,7 +981,7 @@ export function SavedJobsTab() {
       if (statusFilter === 'none' && j.application_status != null) return false
       if (statusFilter !== 'all' && statusFilter !== 'none' && j.application_status !== statusFilter) return false
       const q = search.toLowerCase()
-      if (q && ![j.title, j.company, j.location, ...(j.tags ?? [])].some(f => f?.toLowerCase().includes(q))) return false
+      if (q && ![j.title, j.company, j.location, j.url, j.contact, j.raw_message, j.snippet, ...(j.tags ?? [])].some(f => f?.toLowerCase().includes(q))) return false
       return true
     }),
     sortField,
@@ -998,7 +998,7 @@ export function SavedJobsTab() {
         <div className="relative w-full sm:flex-1 sm:min-w-48">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="חפש לפי תפקיד, חברה, טכנולוגיה..."
+            placeholder="חפש לפי תפקיד, חברה, טכנולוגיה, מייל, קישור, טקסט מהמודעה..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-8"
