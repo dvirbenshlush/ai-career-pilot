@@ -12,7 +12,7 @@ import {
 import {
   Loader2, ExternalLink, MapPin, DollarSign, Wifi, Sparkles,
   Trash2, Search, RefreshCw, Building2, ChevronDown, ChevronUp,
-  Briefcase, Mail, Phone, Send, User, GraduationCap, CheckCircle2, Circle,
+  Briefcase, Mail, Phone, Send, User, GraduationCap, CheckCircle2, Circle, Download,
 } from 'lucide-react'
 
 type AppStatus = 'applied' | 'interviewing' | 'offer' | 'rejected'
@@ -210,6 +210,15 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [genderPicker, setGenderPicker] = useState(false)
+  // CV send dialog (shown every click)
+  const [cvDialogOpen, setCvDialogOpen] = useState(false)
+  const [sendLang, setSendLang] = useState<'he' | 'en'>('he')
+  const [cvType, setCvType] = useState<'original' | 'tailored'>('original')
+  const [tailoring, setTailoring] = useState(false)
+  const [tailoredPdf, setTailoredPdf] = useState<string | null>(null)
+  const [tailoredText, setTailoredText] = useState<string | null>(null)
+  const [tailorDocUrl, setTailorDocUrl] = useState<string | null>(null)
+  const [tailorError, setTailorError] = useState<string | null>(null)
   const [interviewOpen, setInterviewOpen] = useState(false)
   const [interviewLoading, setInterviewLoading] = useState(false)
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
@@ -255,21 +264,24 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   })()
   const contactEmail = extractedEmail
 
-  const doSend = async (gender: Gender) => {
+  const doSend = async (gender: Gender, language: 'he' | 'en', tailoredPdfB64?: string | null) => {
     setSending(true)
     setSendError(null)
     try {
+      const body: Record<string, unknown> = {
+        jobTitle: job.title,
+        company: job.company,
+        contactEmail,
+        snippet: job.snippet,
+        experienceRequired: job.experience_required,
+        gender,
+        language,
+      }
+      if (tailoredPdfB64) body.tailoredPdfB64 = tailoredPdfB64
       const res = await fetch('/api/jobs/send-cv-gmail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobTitle: job.title,
-          company: job.company,
-          contactEmail,
-          snippet: job.snippet,
-          experienceRequired: job.experience_required,
-          gender,
-        }),
+        body: JSON.stringify(body),
       })
       const data = await res.json() as { ok?: boolean; gmailUrl?: string; needsAuth?: boolean; error?: string }
 
@@ -311,7 +323,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
     }
   }
 
-  const startSendFlow = async (gender: Gender) => {
+  const startSendFlow = async (gender: Gender, language: 'he' | 'en' = 'he', tailoredPdfB64?: string | null) => {
     if (!contactEmail) return
     setSendError(null)
 
@@ -367,20 +379,78 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
       })
     }
 
-    await doSend(gender)
+    await doSend(gender, language, tailoredPdfB64)
+  }
+
+  const openCvDialog = () => {
+    setSendLang('he')
+    setCvType('original')
+    setTailoredPdf(null)
+    setTailoredText(null)
+    setTailorDocUrl(null)
+    setTailorError(null)
+    setCvDialogOpen(true)
   }
 
   const handleSendCv = () => {
     if (!contactEmail) return
     const gender = getStoredGender()
     if (!gender) { setGenderPicker(true); return }
-    startSendFlow(gender)
+    openCvDialog()
   }
 
   const pickGender = (gender: Gender) => {
     try { localStorage.setItem('userGender', gender) } catch { /* ignore */ }
     setGenderPicker(false)
-    startSendFlow(gender)
+    openCvDialog()
+  }
+
+  const generateTailored = async () => {
+    setTailoring(true)
+    setTailorError(null)
+    setTailoredPdf(null)
+    setTailoredText(null)
+    setTailorDocUrl(null)
+    try {
+      const res = await fetch('/api/jobs/tailor-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobTitle: job.title,
+          company: job.company,
+          jobDescription: job.raw_message || job.snippet || job.experience_required || job.title,
+          language: sendLang,
+        }),
+      })
+      const data = await res.json() as { tailoredText?: string; pdfBase64?: string; docUrl?: string; error?: string }
+      if (!res.ok || !data.tailoredText) { setTailorError(data.error ?? 'שגיאה ביצירת קורות חיים'); return }
+      setTailoredText(data.tailoredText)
+      setTailoredPdf(data.pdfBase64 ?? null)
+      setTailorDocUrl(data.docUrl ?? null)
+    } catch {
+      setTailorError('שגיאת רשת — נסה שוב')
+    } finally {
+      setTailoring(false)
+    }
+  }
+
+  const downloadTailored = () => {
+    if (!tailoredPdf) return
+    const bytes = Uint8Array.from(atob(tailoredPdf), c => c.charCodeAt(0))
+    const blob = new Blob([bytes], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = sendLang === 'en' ? 'tailored-cv.pdf' : 'קורות-חיים-מותאמים.pdf'
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
+  }
+
+  const doSendWithOptions = async () => {
+    const gender = getStoredGender()
+    if (!gender) return
+    setCvDialogOpen(false)
+    await startSendFlow(gender, sendLang, cvType === 'tailored' ? tailoredPdf : null)
   }
 
   const openInterview = async () => {
@@ -583,12 +653,112 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
         <DialogHeader>
           <DialogTitle>ניסוח מכתב הכיסוי</DialogTitle>
           <DialogDescription>
-            בחר מין כדי שהמכתב יהיה מנוסח בצורה הנכונה בעברית. ניתן לשנות בהמשך.
+            בחר מין כדי שהמכתב יהיה מנוסח בצורה הנכונה בעברית. נשמר לפעמים הבאות.
           </DialogDescription>
         </DialogHeader>
         <div className="flex gap-3 pt-1">
-          <Button className="flex-1" onClick={() => pickGender('male')}>זכר</Button>
-          <Button className="flex-1" variant="outline" onClick={() => pickGender('female')}>נקבה</Button>
+          <Button className="flex-1" onClick={() => pickGender('male')}>👨 זכר</Button>
+          <Button className="flex-1" variant="outline" onClick={() => pickGender('female')}>👩 נקבה</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={cvDialogOpen} onOpenChange={open => { if (!open && !sending) setCvDialogOpen(false) }}>
+      <DialogContent showCloseButton className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>שליחת קורות חיים{job.company ? ` ל-${job.company}` : ''}</DialogTitle>
+          <DialogDescription>בחר שפה וסוג קורות חיים לשליחה</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-1">
+          {/* Language */}
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">שפת קורות החיים</p>
+            <div className="flex gap-2">
+              {(['he', 'en'] as const).map(l => (
+                <button
+                  key={l}
+                  onClick={() => { setSendLang(l); setTailoredPdf(null); setTailoredText(null); setTailorDocUrl(null) }}
+                  className={`flex-1 py-2 px-3 text-sm rounded-md border transition-colors ${
+                    sendLang === l
+                      ? 'bg-indigo-50 border-indigo-400 text-indigo-700 font-medium'
+                      : 'bg-muted border-border text-muted-foreground hover:bg-muted/70'
+                  }`}
+                >
+                  {l === 'he' ? 'עברית' : 'English'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* CV type */}
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">קורות חיים לשליחה</p>
+            <div className="flex gap-2">
+              {(['original', 'tailored'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => { setCvType(t); setTailoredPdf(null); setTailoredText(null); setTailorDocUrl(null) }}
+                  className={`flex-1 py-2 px-3 text-sm rounded-md border transition-colors ${
+                    cvType === t
+                      ? 'bg-indigo-50 border-indigo-400 text-indigo-700 font-medium'
+                      : 'bg-muted border-border text-muted-foreground hover:bg-muted/70'
+                  }`}
+                >
+                  {t === 'original' ? 'מקורי' : '✨ מותאם AI'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {tailorError && <p className="text-sm text-destructive">{tailorError}</p>}
+
+          {/* Tailored preview */}
+          {tailoredText && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-green-700 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> קורות חיים מותאמים נוצרו
+                </p>
+                <div className="flex gap-1.5 mr-auto">
+                  {tailoredPdf && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={downloadTailored}>
+                      <Download className="h-3 w-3 mr-1" /> PDF
+                    </Button>
+                  )}
+                  {tailorDocUrl && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => window.open(tailorDocUrl!, '_blank')}>
+                      <ExternalLink className="h-3 w-3 mr-1" /> Docs
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <pre className="text-xs whitespace-pre-wrap bg-muted/40 rounded p-2 max-h-48 overflow-y-auto leading-relaxed font-sans" dir="rtl">
+                {tailoredText}
+              </pre>
+            </div>
+          )}
+
+          {/* Action */}
+          {cvType === 'tailored' && !tailoredPdf ? (
+            <Button
+              className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white"
+              disabled={tailoring}
+              onClick={generateTailored}
+            >
+              {tailoring
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> מייצר קורות חיים מותאמים...</>
+                : <><Sparkles className="h-4 w-4 mr-2" /> צור קורות חיים מותאמים</>
+              }
+            </Button>
+          ) : (
+            <Button className="w-full" disabled={sending} onClick={doSendWithOptions}>
+              {sending
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> מכין מייל...</>
+                : <><Send className="h-4 w-4 mr-2" /> {cvType === 'tailored' ? 'שלח קורות חיים מותאמים' : 'שלח קורות חיים'}</>
+              }
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
