@@ -58,7 +58,23 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'scan') {
-    const { ok, status, text } = await proxyPost('/whatsapp/scan', { groupIds, userProfile })
+    // Fetch existing fingerprints before calling AI — avoids burning tokens on already-seen messages
+    let knownFingerprints: string[] = []
+    try {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: fps } = await supabase
+          .from('job_opportunities')
+          .select('message_fingerprint')
+          .eq('user_id', user.id)
+          .not('message_fingerprint', 'is', null)
+        knownFingerprints = (fps ?? []).map(r => r.message_fingerprint).filter(Boolean) as string[]
+        console.log(`[WhatsApp] passing ${knownFingerprints.length} known fingerprints to messaging service`)
+      }
+    } catch { /* non-fatal — scan still runs without cache */ }
+
+    const { ok, status, text } = await proxyPost('/whatsapp/scan', { groupIds, userProfile, knownFingerprints })
     if (!ok) return new NextResponse(text, { status, headers: { 'Content-Type': 'application/json' } })
 
     const data = JSON.parse(text) as { jobs: unknown[]; messagesScanned: number; scannedGroupNames?: string[] }

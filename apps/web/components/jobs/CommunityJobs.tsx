@@ -152,7 +152,7 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
   const [groupSearch, setGroupSearch] = useState('')
   const [selectedGroups, setSelectedGroups] = useState<string[]>([])
   const [scanning, setScanning] = useState(false)
-  const [scanInfo, setScanInfo] = useState<{ messagesScanned: number } | null>(null)
+  const [scanInfo, setScanInfo] = useState<{ messagesScanned: number; rateLimitedAt?: string } | null>(null)
   const [jobs, setJobs] = useState<ParsedJob[]>([])
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -269,10 +269,10 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'scan', groupIds: selectedGroups, userProfile }),
       })
-      const data = await res.json() as { jobs?: ParsedJob[]; messagesScanned?: number; error?: string; dbError?: string }
+      const data = await res.json() as { jobs?: ParsedJob[]; messagesScanned?: number; error?: string; dbError?: string; rateLimitedAt?: string }
       if (!res.ok) throw new Error(data.error ?? 'Scan failed')
       setJobs(data.jobs ?? [])
-      setScanInfo({ messagesScanned: data.messagesScanned ?? 0 })
+      setScanInfo({ messagesScanned: data.messagesScanned ?? 0, rateLimitedAt: data.rateLimitedAt })
       if (data.dbError) setError(`שגיאת שמירה ל-DB: ${data.dbError}`)
       else if ((data.jobs?.length ?? 0) > 0) setSaved(true)
     } catch (err) {
@@ -529,19 +529,24 @@ function WhatsAppPanel({ userProfile }: { userProfile?: string }) {
               </Button>
 
               {scanInfo && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>נסרקו {scanInfo.messagesScanned} הודעות</span>
-                  {saved && jobs.length > 0 && (
-                    <span className="flex items-center gap-1 text-green-700">
-                      <CheckCircle className="h-3 w-3" /> {jobs.length} משרות נשמרו בטאב Jobs
-                    </span>
-                  )}
-                  {scanInfo.messagesScanned > 0 && jobs.length === 0 && (
-                    <span>— לא נמצאו משרות בהודעות אלו</span>
-                  )}
-                  {scanInfo.messagesScanned === 0 && (
+                <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <span>נסרקו {scanInfo.messagesScanned} הודעות</span>
+                    {saved && jobs.length > 0 && (
+                      <span className="flex items-center gap-1 text-green-700">
+                        <CheckCircle className="h-3 w-3" /> {jobs.length} משרות נשמרו בטאב Jobs
+                      </span>
+                    )}
+                    {scanInfo.messagesScanned > 0 && jobs.length === 0 && (
+                      <span>— לא נמצאו משרות בהודעות אלו</span>
+                    )}
+                    {scanInfo.messagesScanned === 0 && (
+                      <span className="text-amber-600">— אין הודעות בקבוצות אלו עדיין.</span>
+                    )}
+                  </div>
+                  {scanInfo.rateLimitedAt && (
                     <span className="text-amber-600">
-                      — אין הודעות בקבוצות אלו עדיין.
+                      ⚠ Groq הגיע למגבלת טוקנים — תוצאות חלקיות נשמרו. הסריקה הבאה תמשיך מאיפה שנפסק (נסה שוב בעוד {scanInfo.rateLimitedAt}).
                     </span>
                   )}
                 </div>
@@ -588,7 +593,7 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
   const [validating, setValidating] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [jobs, setJobs] = useState<ParsedJob[]>([])
-  const [scanInfo, setScanInfo] = useState<{ messagesScanned: number; imagesFound: number; imagesOcrd: number } | null>(null)
+  const [scanInfo, setScanInfo] = useState<{ messagesScanned: number; imagesFound: number; imagesOcrd: number; rateLimitedAt?: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [maxAgeDays, setMaxAgeDays] = useState(14)
@@ -626,10 +631,10 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'scan', botToken: botToken || undefined, channels: channelList, userProfile, maxAgeDays }),
       })
-      const data = await res.json() as { jobs?: ParsedJob[]; error?: string; messagesScanned?: number; imagesFound?: number; imagesOcrd?: number }
+      const data = await res.json() as { jobs?: ParsedJob[]; error?: string; messagesScanned?: number; imagesFound?: number; imagesOcrd?: number; rateLimitedAt?: string }
       if (!res.ok) throw new Error(data.error ?? 'Scan failed')
       setJobs(data.jobs ?? [])
-      setScanInfo({ messagesScanned: data.messagesScanned ?? 0, imagesFound: data.imagesFound ?? 0, imagesOcrd: data.imagesOcrd ?? 0 })
+      setScanInfo({ messagesScanned: data.messagesScanned ?? 0, imagesFound: data.imagesFound ?? 0, imagesOcrd: data.imagesOcrd ?? 0, rateLimitedAt: data.rateLimitedAt })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Scan failed')
     } finally {
@@ -726,17 +731,24 @@ function TelegramPanel({ userProfile }: { userProfile?: string }) {
       </Card>
 
       {scanInfo && (
-        <div className="flex flex-wrap gap-2 text-xs">
-          <span className="text-muted-foreground">נסרקו {scanInfo.messagesScanned} הודעות</span>
-          {scanInfo.imagesFound > 0 && (
-            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${scanInfo.imagesOcrd > 0 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600'}`}>
-              <ImageIcon className="h-3 w-3" />
-              {scanInfo.imagesFound} תמונות נמצאו
-              {scanInfo.imagesOcrd > 0 ? ` · ${scanInfo.imagesOcrd} OCR'd ✓` : ' · 0 OCR (תמונות ללא טקסט)'}
+        <div className="flex flex-col gap-1 text-xs">
+          <div className="flex flex-wrap gap-2">
+            <span className="text-muted-foreground">נסרקו {scanInfo.messagesScanned} הודעות</span>
+            {scanInfo.imagesFound > 0 && (
+              <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${scanInfo.imagesOcrd > 0 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600'}`}>
+                <ImageIcon className="h-3 w-3" />
+                {scanInfo.imagesFound} תמונות נמצאו
+                {scanInfo.imagesOcrd > 0 ? ` · ${scanInfo.imagesOcrd} OCR'd ✓` : ' · 0 OCR (תמונות ללא טקסט)'}
+              </span>
+            )}
+            {jobs.length === 0 && scanInfo.messagesScanned === 0 && (
+              <span className="text-amber-600">הערוץ פרטי או אינו ציבורי — נסה ערוץ ציבורי אחר</span>
+            )}
+          </div>
+          {scanInfo.rateLimitedAt && (
+            <span className="text-amber-600">
+              ⚠ Groq הגיע למגבלת טוקנים — תוצאות חלקיות נשמרו. הסריקה הבאה תמשיך מאיפה שנפסק (נסה שוב בעוד {scanInfo.rateLimitedAt}).
             </span>
-          )}
-          {jobs.length === 0 && scanInfo.messagesScanned === 0 && (
-            <span className="text-amber-600">הערוץ פרטי או אינו ציבורי — נסה ערוץ ציבורי אחר</span>
           )}
         </div>
       )}

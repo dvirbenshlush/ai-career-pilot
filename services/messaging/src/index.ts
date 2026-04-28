@@ -49,9 +49,10 @@ app.post('/whatsapp/reset', async (_req, res) => {
 })
 
 app.post('/whatsapp/scan', async (req, res) => {
-  const { groupIds, userProfile } = req.body as {
+  const { groupIds, userProfile, knownFingerprints } = req.body as {
     groupIds: string[]
     userProfile?: string
+    knownFingerprints?: string[]
   }
 
   if (!Array.isArray(groupIds) || groupIds.length === 0) {
@@ -63,13 +64,17 @@ app.post('/whatsapp/scan', async (req, res) => {
     return res.status(400).json({ error: 'WhatsApp not connected', status: s.status })
   }
 
+  const fpSet = knownFingerprints?.length ? new Set(knownFingerprints) : undefined
+
   try {
     const allJobs = []
     let totalScanned = 0
+    let rateLimitedAt: string | undefined
 
     // Process each group independently — last 3 days of stored messages
     const scannedGroupNames: string[] = []
     for (const gid of groupIds) {
+      if (rateLimitedAt) break  // stop scanning more groups if already rate-limited
       const msgs = fetchGroupMessages([gid]) // default: last 3 days
       if (msgs.length === 0) {
         const name = fetchGroupName(gid)
@@ -79,11 +84,12 @@ app.post('/whatsapp/scan', async (req, res) => {
       totalScanned += msgs.length
       const groupName = msgs[0]?.source_name
       if (groupName) scannedGroupNames.push(groupName)
-      const jobs = await parseJobMessages(msgs, userProfile)
-      allJobs.push(...jobs)
+      const result = await parseJobMessages(msgs, userProfile, fpSet)
+      allJobs.push(...result.jobs)
+      if (result.rateLimitedAt) rateLimitedAt = result.rateLimitedAt
     }
 
-    return res.json({ jobs: allJobs, messagesScanned: totalScanned, scannedGroupNames })
+    return res.json({ jobs: allJobs, messagesScanned: totalScanned, scannedGroupNames, rateLimitedAt })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return res.status(500).json({ error: msg })
@@ -100,24 +106,28 @@ app.post('/telegram/validate', async (req, res) => {
 })
 
 app.post('/telegram/scan', async (req, res) => {
-  const { botToken, channels, userProfile, maxAgeDays } = req.body as {
+  const { botToken, channels, userProfile, maxAgeDays, knownFingerprints } = req.body as {
     botToken?: string
     channels: string[]
     userProfile?: string
     maxAgeDays?: number
+    knownFingerprints?: string[]
   }
 
   if (!Array.isArray(channels) || channels.length === 0) {
     return res.status(400).json({ error: 'channels required' })
   }
 
+  const fpSet = knownFingerprints?.length ? new Set(knownFingerprints) : undefined
+
   try {
     const { messages, imagesFound, imagesOcrd } = await fetchChannelMessages(botToken ?? '', channels, maxAgeDays ?? 14)
-    const jobs = await parseJobMessages(
+    const { jobs, rateLimitedAt } = await parseJobMessages(
       messages.map(m => ({ ...m, sender_name: m.sender_name ?? '' })),
-      userProfile
+      userProfile,
+      fpSet
     )
-    return res.json({ jobs, messagesScanned: messages.length, imagesFound, imagesOcrd })
+    return res.json({ jobs, messagesScanned: messages.length, imagesFound, imagesOcrd, rateLimitedAt })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return res.status(500).json({ error: msg })

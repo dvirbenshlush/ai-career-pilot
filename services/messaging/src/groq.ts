@@ -106,7 +106,7 @@ MESSAGES:
 ${batch}
 
 For EVERY message extract:
-- title: job title — infer from context if needed (e.g. "מפתח Full Stack", "בדיקות QA", "מנהל מוצר"). NEVER return "Unknown".
+- title: job title — copy it VERBATIM from the message if stated. If not stated, infer specifically from what the message actually describes (e.g. "מנהל לוגיסטיקה", "אנליסט נתונים", "מעצב UX", "מהנדס DevOps", "ראש צוות מכירות") — be precise and varied, never default to generic titles. NEVER return "Unknown".
 - company: company name or ""
 - location: city/region/Remote/היברידי or ""
 - salary_range: any salary mentioned or ""
@@ -214,12 +214,22 @@ If no jobs found, return { "jobs": [] }`,
   }
 }
 
+export interface ParseJobsResult {
+  jobs: ParsedJob[]
+  rateLimitedAt?: string  // set when Groq rate-limited mid-scan; value is Groq's retry-after hint
+}
+
 export async function parseJobMessages(
   rawMessages: Array<{ text: string; source: 'whatsapp' | 'telegram'; source_name: string; sender_name?: string; from_image?: boolean }>,
-  userProfile?: string
-): Promise<ParsedJob[]> {
-  const messages = rawMessages
-  if (messages.length === 0) return []
+  userProfile?: string,
+  knownFingerprints?: Set<string>
+): Promise<ParseJobsResult> {
+  const messages = knownFingerprints?.size
+    ? rawMessages.filter(m => !knownFingerprints.has(m.text.slice(0, 300).trim()))
+    : rawMessages
+  if (messages.length === 0) return { jobs: [] }
+  const skipped = rawMessages.length - messages.length
+  if (skipped > 0) console.log(`[Groq] skipped ${skipped}/${rawMessages.length} already-seen messages`)
   console.log(`[Groq] parseJobMessages called with ${messages.length} messages`)
 
   const profileContext = userProfile
@@ -236,15 +246,17 @@ export async function parseJobMessages(
       results.push(...jobs)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      // Surface rate-limit errors immediately — no point processing remaining chunks
       if (msg.includes('429') || msg.includes('rate_limit_exceeded') || msg.includes('Rate limit')) {
         const retryMatch = msg.match(/try again in ([^.]+)/)
-        const retryIn = retryMatch ? ` נסה שוב בעוד ${retryMatch[1]}` : ''
-        throw new Error(`מגבלת Groq הגיעה לקצה היומי.${retryIn}`)
+        const retryIn = retryMatch?.[1] ?? 'unknown'
+        console.warn(`[Groq] rate-limited at chunk ${i} — returning ${results.length} partial results. Retry in ${retryIn}`)
+        // Return partial results so the caller can save them; the fingerprint cache
+        // will skip these messages on the next scan, processing only the remainder.
+        return { jobs: results, rateLimitedAt: retryIn }
       }
       console.error(`[Groq] chunk ${i}-${i + chunk.length} failed:`, err)
     }
   }
 
-  return results
+  return { jobs: results }
 }
