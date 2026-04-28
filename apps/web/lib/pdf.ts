@@ -1,13 +1,12 @@
 import PDFDocument from 'pdfkit'
+import { readFile } from 'fs/promises'
+import { join } from 'path'
 
-const FONT_URL = 'https://cdn.jsdelivr.net/gh/googlefonts/heebo@main/fonts/ttf/Heebo-Regular.ttf'
 let _font: Buffer | null = null
 
 async function loadFont(): Promise<Buffer> {
   if (!_font) {
-    const r = await fetch(FONT_URL)
-    if (!r.ok) throw new Error(`Font fetch failed: ${r.status}`)
-    _font = Buffer.from(await r.arrayBuffer())
+    _font = await readFile(join(process.cwd(), 'public', 'fonts', 'Heebo-Regular.ttf'))
   }
   return _font
 }
