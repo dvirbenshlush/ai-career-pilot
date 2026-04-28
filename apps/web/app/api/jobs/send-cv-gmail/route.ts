@@ -10,28 +10,34 @@ async function getValidAccessToken(supabase: Awaited<ReturnType<typeof createCli
     .from('google_tokens')
     .select('access_token, refresh_token, expires_at')
     .eq('user_id', userId)
-    .single()
+    .maybeSingle()
 
   if (!data) return null
 
-  // Token still valid
-  if (data.expires_at > Date.now() + 60_000) return data.access_token
+  // Token still valid (with 1-min buffer)
+  if (Number(data.expires_at) > Date.now() + 60_000) return data.access_token
 
   // Try to refresh
-  if (!data.refresh_token) return null
+  if (!data.refresh_token) {
+    await supabase.from('google_tokens').delete().eq('user_id', userId)
+    return null
+  }
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: process.env.GOOGLE_CLIENT_ID!.trim(),
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!.trim(),
       refresh_token: data.refresh_token,
       grant_type: 'refresh_token',
     }),
   })
 
-  if (!res.ok) return null
+  if (!res.ok) {
+    await supabase.from('google_tokens').delete().eq('user_id', userId)
+    return null
+  }
 
   const tokens = await res.json() as { access_token: string; expires_in: number }
   await supabase.from('google_tokens').update({

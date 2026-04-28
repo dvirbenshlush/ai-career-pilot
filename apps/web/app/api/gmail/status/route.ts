@@ -10,11 +10,10 @@ export async function GET() {
     .from('google_tokens')
     .select('email, expires_at, refresh_token')
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
 
   if (!data) return NextResponse.json({ connected: false })
 
-  // Token is valid if not expired, or if we have a refresh token to renew it
-  const valid = data.expires_at > Date.now() || !!data.refresh_token
+  const valid = Number(data.expires_at) > Date.now() + 60_000 || !!data.refresh_token
   return NextResponse.json({ connected: valid, email: data.email })
 }

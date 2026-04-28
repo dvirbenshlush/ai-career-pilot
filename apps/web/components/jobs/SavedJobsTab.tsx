@@ -273,6 +273,12 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
       })
       const data = await res.json() as { ok?: boolean; gmailUrl?: string; needsAuth?: boolean; error?: string }
 
+      // Stale token — server already cleared it from DB, user needs to reconnect
+      if (data.needsAuth) {
+        setSendError('חיבור Gmail פג תוקף — לחץ שוב לחיבור מחדש')
+        return
+      }
+
       if (!res.ok || !data.ok) {
         setSendError(data.error ?? 'שגיאה בהכנת המייל')
         return
@@ -343,12 +349,14 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
           let isClosed = false
           try { isClosed = popup.closed } catch { /* COOP — keep polling */ }
           if (isClosed) {
-            await new Promise(r => setTimeout(r, 1200))
-            try {
-              const r = await fetch('/api/gmail/status')
-              const s = await r.json() as { connected: boolean }
-              if (s.connected) { done(); return }
-            } catch { /* ignore */ }
+            for (let attempt = 0; attempt < 5; attempt++) {
+              await new Promise(r => setTimeout(r, 700))
+              try {
+                const r = await fetch('/api/gmail/status')
+                const s = await r.json() as { connected: boolean }
+                if (s.connected) { done(); return }
+              } catch { /* ignore */ }
+            }
             done(new Error('חלון ההתחברות נסגר ללא אימות'))
           }
         }, 1000)
