@@ -14,25 +14,70 @@ function setStatus(msg, type = 'loading') {
   el.className = `status ${type}`
   el.style.display = msg ? 'block' : 'none'
 }
+function setWizStatus(msg, type = 'loading') {
+  const el = $('wiz-status')
+  el.textContent = msg
+  el.className = `status ${type}`
+  el.style.display = msg ? 'block' : 'none'
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let selectedGender = null
+const wiz = {
+  gender: null,
+  lang: 'he',
+  cvtype: 'original',
+  pdfBase64: null,
+  tailoredText: null,
+  docUrl: null,
+}
 
-function selectGender(gender) {
-  selectedGender = gender
-  document.querySelectorAll('.btn-gender').forEach(b => {
-    b.classList.toggle('selected', b.dataset.gender === gender)
+let wizPasteReturn = false
+
+function wizReset() {
+  wiz.gender = null
+  wiz.lang = 'he'
+  wiz.cvtype = 'original'
+  wiz.pdfBase64 = null
+  wiz.tailoredText = null
+  wiz.docUrl = null
+
+  document.querySelectorAll('.btn-toggle').forEach(b => {
+    const isDefault = (b.dataset.group === 'lang' && b.dataset.val === 'he') ||
+                      (b.dataset.group === 'cvtype' && b.dataset.val === 'original')
+    b.classList.toggle('selected', isDefault)
   })
-  updateSendButton()
+
+  $('wiz-preview').style.display = 'none'
+  setWizStatus('', '')
+  wizUpdateButton()
+}
+
+function wizUpdateButton() {
+  const btn = $('btn-wiz-action')
+  if (!wiz.gender) {
+    btn.disabled = true
+    btn.textContent = 'המשך ›'
+    btn.className = 'btn btn-primary'
+    return
+  }
+  btn.disabled = false
+  if (wiz.cvtype === 'tailored' && !wiz.pdfBase64) {
+    btn.textContent = '✨ צור קו"ח מותאם'
+    btn.className = 'btn btn-tailor'
+  } else if (wiz.cvtype === 'tailored') {
+    btn.textContent = '📤 שלח קו"ח מותאם'
+    btn.className = 'btn btn-primary'
+  } else {
+    btn.textContent = '📤 שלח קו"ח'
+    btn.className = 'btn btn-primary'
+  }
 }
 
 function updateSendButton() {
   const hasEmail = $('contact-email').value.includes('@')
-  const hasGender = !!selectedGender
   const hasText = $('job-text').value.trim().length > 10
-  $('btn-send-cv').disabled = !(hasEmail && hasGender && hasText)
-  $('btn-tailor').disabled = !hasText
+  $('btn-send-cv').disabled = !(hasEmail && hasText)
   $('btn-save-applied').disabled = !hasText
 }
 
@@ -67,15 +112,11 @@ async function init() {
 $('btn-connect').addEventListener('click', () => {
   const url = `${AUTH_URL}?extId=${chrome.runtime.id}`
   chrome.tabs.create({ url })
-  // Poll for token after auth page opens
   const poll = setInterval(async () => {
     const token = await getToken()
-    if (token) {
-      clearInterval(poll)
-      init()
-    }
+    if (token) { clearInterval(poll); init() }
   }, 1000)
-  setTimeout(() => clearInterval(poll), 120_000) // stop polling after 2 min
+  setTimeout(() => clearInterval(poll), 120_000)
 })
 
 $('btn-logout').addEventListener('click', () => {
@@ -88,7 +129,7 @@ async function tryReadPage() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
     if (!tab?.id) return
-    if (!tab.url?.startsWith('http')) return  // skip chrome:// and other internal pages
+    if (!tab.url?.startsWith('http')) return
 
     chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' }, response => {
       if (chrome.runtime.lastError || !response) return
@@ -101,14 +142,9 @@ async function tryReadPage() {
 
 $('btn-read-page').addEventListener('click', tryReadPage)
 
-// ── Form events ───────────────────────────────────────────────────────────────
-
-document.querySelectorAll('.btn-gender').forEach(b => {
-  b.addEventListener('click', () => selectGender(b.dataset.gender))
-})
+// ── Main screen events ────────────────────────────────────────────────────────
 
 $('job-text').addEventListener('input', () => {
-  // Auto-extract email from pasted text
   const emails = $('job-text').value.match(/[\w.+\-]+@[\w\-]+(?:\.[a-zA-Z]{2,})+/g) ?? []
   if (emails.length && !$('contact-email').value) $('contact-email').value = emails[0]
   updateSendButton()
@@ -116,16 +152,38 @@ $('job-text').addEventListener('input', () => {
 
 $('contact-email').addEventListener('input', updateSendButton)
 
-// ── Send CV ───────────────────────────────────────────────────────────────────
+$('btn-send-cv').addEventListener('click', () => {
+  wizReset()
+  showScreen('screen-wizard')
+})
 
-$('btn-send-cv').addEventListener('click', async () => {
+// ── Wizard toggles ────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.btn-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const { group, val } = btn.dataset
+    document.querySelectorAll(`.btn-toggle[data-group="${group}"]`).forEach(b => b.classList.remove('selected'))
+    btn.classList.add('selected')
+    wiz[group] = val
+
+    if (group === 'cvtype' || group === 'lang') {
+      wiz.pdfBase64 = null
+      wiz.tailoredText = null
+      wiz.docUrl = null
+      $('wiz-preview').style.display = 'none'
+      setWizStatus('', '')
+    }
+
+    wizUpdateButton()
+  })
+})
+
+$('btn-back-wizard').addEventListener('click', () => showScreen('screen-main'))
+
+// ── Job meta extraction ───────────────────────────────────────────────────────
+
+async function extractJobMeta() {
   const jobText = $('job-text').value.trim()
-  const contactEmail = $('contact-email').value.trim()
-
-  setStatus('מכין ומשלח קו"ח...', 'loading')
-  $('btn-send-cv').disabled = true
-
-  // 1. Extract job details via scan
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   const currentUrl = tab?.url ?? ''
 
@@ -135,43 +193,128 @@ $('btn-send-cv').addEventListener('click', async () => {
   })
 
   let jobTitle = '', company = '', snippet = jobText.slice(0, 300)
-
   if (scanRes?.data?.jobs?.length) {
     const j = scanRes.data.jobs[0]
     jobTitle = j.title ?? ''
     company = j.company ?? ''
     snippet = j.snippet ?? snippet
   }
-
-  // Fallback: parse title/company from text manually
   if (!jobTitle) {
     const lines = jobText.split('\n').filter(l => l.trim())
     jobTitle = lines[0]?.slice(0, 80) ?? 'משרה'
   }
+  return { jobTitle, company, snippet, jobDescription: jobText }
+}
 
-  // 2. Send CV
-  const sendRes = await apiCall('/api/jobs/send-cv-gmail', {
-    jobTitle, company, contactEmail, snippet, gender: selectedGender,
-  })
+// ── Generate tailored CV ──────────────────────────────────────────────────────
+
+async function generateTailoredCv(resumeText = '') {
+  setWizStatus('מייצר קו"ח מותאם...', 'loading')
+  $('btn-wiz-action').disabled = true
+
+  const { jobTitle, company, jobDescription } = await extractJobMeta()
+
+  const body = { jobTitle, company, jobDescription, language: wiz.lang }
+  if (resumeText) body.resumeText = resumeText
+
+  const res = await apiCall('/api/jobs/tailor-resume', body)
+
+  if (res?.data?.error === 'noResume' || res?.status === 404) {
+    wizPasteReturn = true
+    showScreen('screen-paste-resume')
+    return
+  }
+
+  if (!res?.ok || !res.data?.tailoredText) {
+    setWizStatus(res?.data?.error ?? 'שגיאה ביצירת קו"ח', 'error')
+    $('btn-wiz-action').disabled = false
+    wizUpdateButton()
+    return
+  }
+
+  wiz.pdfBase64 = res.data.pdfBase64 ?? null
+  wiz.tailoredText = res.data.tailoredText
+  wiz.docUrl = res.data.docUrl ?? null
+
+  $('wiz-tailor-text').textContent = wiz.tailoredText
+  $('wiz-preview').style.display = 'flex'
+  $('btn-wiz-open-doc').style.display = wiz.docUrl ? 'inline-flex' : 'none'
+
+  setWizStatus('✅ קו"ח מותאם נוצר! ניתן להוריד PDF או לשלוח ישירות.', 'success')
+  wizUpdateButton()
+}
+
+// ── Send CV ───────────────────────────────────────────────────────────────────
+
+async function sendCv() {
+  const contactEmail = $('contact-email').value.trim()
+  setWizStatus('שולח...', 'loading')
+  $('btn-wiz-action').disabled = true
+
+  const { jobTitle, company, snippet } = await extractJobMeta()
+
+  const body = { jobTitle, company, contactEmail, snippet, gender: wiz.gender, language: wiz.lang }
+  if (wiz.cvtype === 'tailored' && wiz.pdfBase64) body.tailoredPdfB64 = wiz.pdfBase64
+
+  const sendRes = await apiCall('/api/jobs/send-cv-gmail', body)
 
   if (sendRes?.data?.needsAuth) {
-    setStatus('מחבר Gmail...', 'loading')
-    // Open Gmail OAuth flow in the browser — tokens saved to DB after completion
     chrome.tabs.create({ url: `${API_BASE}/api/gmail/auth?returnTo=/jobs` })
-    setStatus('✅ חבר Gmail בחלון שנפתח, ואז נסה שוב', 'success')
-    $('btn-send-cv').disabled = false
+    setWizStatus('✅ חבר Gmail בחלון שנפתח, ואז נסה שוב', 'success')
+    $('btn-wiz-action').disabled = false
     return
   }
 
   if (!sendRes?.ok) {
-    setStatus(sendRes?.data?.error ?? 'שגיאה בשליחה', 'error')
-    $('btn-send-cv').disabled = false
+    setWizStatus(sendRes?.data?.error ?? 'שגיאה בשליחה', 'error')
+    $('btn-wiz-action').disabled = false
     return
   }
 
-  setStatus('✅ טיוטה נוצרה ב-Gmail!', 'success')
+  setWizStatus('✅ טיוטה נוצרה ב-Gmail!', 'success')
   if (sendRes.data?.gmailUrl) chrome.tabs.create({ url: sendRes.data.gmailUrl })
-  updateSendButton()
+  $('btn-wiz-action').disabled = false
+}
+
+$('btn-wiz-action').addEventListener('click', async () => {
+  if (wiz.cvtype === 'tailored' && !wiz.pdfBase64) {
+    await generateTailoredCv()
+  } else {
+    await sendCv()
+  }
+})
+
+// ── PDF download ──────────────────────────────────────────────────────────────
+
+$('btn-wiz-download').addEventListener('click', () => {
+  if (!wiz.pdfBase64) return
+  const bytes = Uint8Array.from(atob(wiz.pdfBase64), c => c.charCodeAt(0))
+  const blob = new Blob([bytes], { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = wiz.lang === 'en' ? 'tailored-cv.pdf' : 'קורות-חיים-מותאמים.pdf'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 5000)
+})
+
+$('btn-wiz-open-doc').addEventListener('click', () => {
+  if (wiz.docUrl) chrome.tabs.create({ url: wiz.docUrl })
+})
+
+// ── Paste resume ──────────────────────────────────────────────────────────────
+
+$('btn-back-paste').addEventListener('click', () => {
+  if (wizPasteReturn) { wizPasteReturn = false; showScreen('screen-wizard') }
+  else showScreen('screen-main')
+})
+
+$('btn-tailor-with-text').addEventListener('click', () => {
+  const resumeText = $('resume-text-input').value.trim()
+  if (!resumeText) return
+  wizPasteReturn = false
+  showScreen('screen-wizard')
+  generateTailoredCv(resumeText)
 })
 
 // ── Interview prep ────────────────────────────────────────────────────────────
@@ -205,79 +348,6 @@ $('btn-interview').addEventListener('click', async () => {
 })
 
 $('btn-back').addEventListener('click', () => showScreen('screen-main'))
-$('btn-back-paste').addEventListener('click', () => showScreen('screen-main'))
-
-// ── Tailor resume ─────────────────────────────────────────────────────────────
-
-let tailoredDocUrl = null
-
-async function runTailor(resumeText = '') {
-  const jobText = $('job-text').value.trim()
-  if (!jobText) return
-
-  showScreen('screen-tailor')
-  $('tailor-content').style.display = 'none'
-  $('tailor-status').style.display = 'block'
-  $('tailor-status').className = 'status loading spinner'
-  $('tailor-status').textContent = 'מייצר קו"ח מותאם...'
-
-  const lines = jobText.split('\n').filter(l => l.trim())
-  const jobTitle = lines[0]?.slice(0, 80) ?? 'משרה'
-
-  const body = { jobTitle, jobDescription: jobText }
-  if (resumeText) body.resumeText = resumeText
-
-  const res = await apiCall('/api/jobs/tailor-resume', body)
-
-  if (res?.data?.error === 'noResume' || res?.status === 404) {
-    showScreen('screen-paste-resume')
-    return
-  }
-
-  if (res?.data?.needsAuth) {
-    $('tailor-status').className = 'status error'
-    $('tailor-status').textContent = 'חבר Gmail קודם כדי לשמור ב-Google Docs'
-    chrome.tabs.create({ url: `${API_BASE}/api/gmail/auth?returnTo=/jobs` })
-    return
-  }
-
-  if (!res?.ok || !res.data?.tailoredText) {
-    $('tailor-status').className = 'status error'
-    $('tailor-status').textContent = res?.data?.error ?? 'שגיאה ביצירת קו"ח'
-    return
-  }
-
-  tailoredDocUrl = res.data.docUrl ?? null
-  $('tailor-text').textContent = res.data.tailoredText
-  $('tailor-status').style.display = 'none'
-  $('tailor-content').style.display = 'block'
-
-  if (tailoredDocUrl) {
-    $('btn-open-doc').style.display = 'block'
-    $('btn-open-doc').textContent = '📄 פתח ב-Google Docs'
-  } else {
-    $('btn-open-doc').style.display = 'none'
-  }
-}
-
-$('btn-tailor').addEventListener('click', () => runTailor())
-
-$('btn-tailor-with-text').addEventListener('click', () => {
-  const resumeText = $('resume-text-input').value.trim()
-  if (!resumeText) return
-  runTailor(resumeText)
-})
-
-$('btn-open-doc').addEventListener('click', () => {
-  if (tailoredDocUrl) chrome.tabs.create({ url: tailoredDocUrl })
-})
-
-$('btn-copy-resume').addEventListener('click', async () => {
-  const text = $('tailor-text').textContent
-  await navigator.clipboard.writeText(text)
-  $('btn-copy-resume').textContent = '✅ הועתק!'
-  setTimeout(() => { $('btn-copy-resume').textContent = '📋 העתק טקסט' }, 2000)
-})
 
 // ── Save as applied ───────────────────────────────────────────────────────────
 

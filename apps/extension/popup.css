@@ -50,7 +50,7 @@ textarea, input[type="email"] {
 }
 textarea:focus, input:focus { outline: 2px solid #6366f1; border-color: transparent; }
 
-.gender-row { display: flex; gap: 8px; }
+.toggle-row { display: flex; gap: 8px; }
 
 .btn {
   padding: 8px 14px;
@@ -71,14 +71,15 @@ textarea:focus, input:focus { outline: 2px solid #6366f1; border-color: transpar
 
 .btn-sm { font-size: 12px; padding: 5px 10px; align-self: flex-start; }
 
-.btn-gender {
+.btn-toggle {
   flex: 1;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   color: #374151;
   border-radius: 6px;
 }
-.btn-gender.selected { background: #eef2ff; border-color: #6366f1; color: #4f46e5; }
+.btn-toggle:hover:not(.selected) { background: #f3f4f6; }
+.btn-toggle.selected { background: #eef2ff; border-color: #6366f1; color: #4f46e5; }
 
 .actions { display: flex; gap: 8px; }
 .actions .btn { flex: 1; }
@@ -100,6 +101,11 @@ textarea:focus, input:focus { outline: 2px solid #6366f1; border-color: transpar
   text-align: center;
   padding: 8px 0;
 }
+
+#wiz-preview { flex-direction: column; gap: 8px; }
+
+.preview-actions { display: flex; gap: 8px; }
+.preview-actions .btn { flex: 1; }
 
 #screen-interview #interview-content { display: flex; flex-direction: column; gap: 10px; }
 
@@ -131,9 +137,6 @@ textarea:focus, input:focus { outline: 2px solid #6366f1; border-color: transpar
 }
 .btn-save:hover:not(:disabled) { background: #dcfce7; }
 
-.tailor-actions { display: flex; gap: 8px; margin-bottom: 10px; }
-.tailor-actions .btn { flex: 1; font-size: 12px; padding: 7px 8px; }
-
 .resume-preview {
   white-space: pre-wrap;
   font-size: 11px;
@@ -143,7 +146,7 @@ textarea:focus, input:focus { outline: 2px solid #6366f1; border-color: transpar
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   padding: 10px;
-  max-height: 320px;
+  max-height: 260px;
   overflow-y: auto;
   line-height: 1.5;
 }

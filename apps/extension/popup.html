@@ -35,14 +35,6 @@
         <input id="contact-email" type="email" placeholder="hr@company.com" />
       </div>
 
-      <div class="section">
-        <label>מגדר לניסוח מכתב</label>
-        <div class="gender-row">
-          <button class="btn btn-gender" data-gender="male">👨 זכר</button>
-          <button class="btn btn-gender" data-gender="female">👩 נקבה</button>
-        </div>
-      </div>
-
       <div id="status" class="status" style="display:none"></div>
 
       <div class="actions">
@@ -50,10 +42,50 @@
         <button id="btn-interview" class="btn btn-secondary">🎓 הכן לראיון</button>
       </div>
       <div class="actions">
-        <button id="btn-tailor" class="btn btn-tailor" disabled>✨ התאם קו"ח למשרה</button>
         <button id="btn-save-applied" class="btn btn-save" disabled>📌 שמור כהגשה</button>
       </div>
 
+    </div>
+
+    <!-- Screen: send wizard -->
+    <div id="screen-wizard" class="screen" style="display:none">
+      <button id="btn-back-wizard" class="btn btn-secondary btn-sm">← חזור</button>
+
+      <div class="section">
+        <label>מגדר לניסוח המכתב</label>
+        <div class="toggle-row">
+          <button class="btn btn-toggle" data-group="gender" data-val="male">👨 זכר</button>
+          <button class="btn btn-toggle" data-group="gender" data-val="female">👩 נקבה</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>שפת קורות החיים</label>
+        <div class="toggle-row">
+          <button class="btn btn-toggle selected" data-group="lang" data-val="he">עברית</button>
+          <button class="btn btn-toggle" data-group="lang" data-val="en">English</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>קורות חיים לשליחה</label>
+        <div class="toggle-row">
+          <button class="btn btn-toggle selected" data-group="cvtype" data-val="original">מקורי</button>
+          <button class="btn btn-toggle" data-group="cvtype" data-val="tailored">✨ מותאם AI</button>
+        </div>
+      </div>
+
+      <div id="wiz-status" class="status" style="display:none"></div>
+
+      <div id="wiz-preview" style="display:none">
+        <div class="preview-actions">
+          <button id="btn-wiz-download" class="btn btn-secondary btn-sm">⬇️ הורד PDF</button>
+          <button id="btn-wiz-open-doc" class="btn btn-secondary btn-sm" style="display:none">📄 Google Docs</button>
+        </div>
+        <pre id="wiz-tailor-text" class="resume-preview"></pre>
+      </div>
+
+      <button id="btn-wiz-action" class="btn btn-primary" disabled>המשך ›</button>
     </div>
 
     <!-- Screen: paste resume (shown when no resume in DB) -->
@@ -61,22 +93,9 @@
       <button id="btn-back-paste" class="btn btn-secondary btn-sm">← חזור</button>
       <p class="hint" style="text-align:right">לא נמצא קו"ח שמור. הדבק את הטקסט של הקו"ח שלך:</p>
       <div class="section">
-        <textarea id="resume-text-input" rows="8" placeholder="הדבק כאן את תוכן הקו"ח שלך..."></textarea>
+        <textarea id="resume-text-input" rows="8" placeholder="הדבק כאן את תוכן הקו&quot;ח שלך..."></textarea>
       </div>
       <button id="btn-tailor-with-text" class="btn btn-tailor">✨ התאם קו"ח למשרה</button>
-    </div>
-
-    <!-- Screen: tailored resume -->
-    <div id="screen-tailor" class="screen" style="display:none">
-      <button id="btn-back-tailor" class="btn btn-secondary btn-sm">← חזור</button>
-      <div id="tailor-status" class="status" style="display:none"></div>
-      <div id="tailor-content" style="display:none">
-        <div class="tailor-actions">
-          <button id="btn-open-doc" class="btn btn-primary">📄 פתח ב-Google Docs</button>
-          <button id="btn-copy-resume" class="btn btn-secondary">📋 העתק טקסט</button>
-        </div>
-        <pre id="tailor-text" class="resume-preview"></pre>
-      </div>
     </div>
 
     <!-- Screen: interview questions -->
