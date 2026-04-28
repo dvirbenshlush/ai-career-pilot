@@ -30,6 +30,7 @@ const wiz = {
   pdfBase64: null,
   tailoredText: null,
   docUrl: null,
+  userName: null,
 }
 
 let wizPasteReturn = false
@@ -235,6 +236,7 @@ async function generateTailoredCv(resumeText = '') {
   wiz.pdfBase64 = res.data.pdfBase64 ?? null
   wiz.tailoredText = res.data.tailoredText
   wiz.docUrl = res.data.docUrl ?? null
+  wiz.userName = res.data.userName ?? null
 
   $('wiz-tailor-text').textContent = wiz.tailoredText
   $('wiz-preview').style.display = 'flex'
@@ -255,6 +257,8 @@ async function sendCv() {
 
   const body = { jobTitle, company, contactEmail, snippet, gender: wiz.gender, language: wiz.lang }
   if (wiz.cvtype === 'tailored' && wiz.pdfBase64) body.tailoredPdfB64 = wiz.pdfBase64
+  else if (wiz.cvtype === 'tailored' && wiz.tailoredText) body.tailoredText = wiz.tailoredText
+  if (wiz.cvtype === 'tailored' && wiz.userName) body.userName = wiz.userName
 
   const sendRes = await apiCall('/api/jobs/send-cv-gmail', body)
 
@@ -293,7 +297,7 @@ $('btn-wiz-download').addEventListener('click', () => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = wiz.lang === 'en' ? 'tailored-cv.pdf' : 'קורות-חיים-מותאמים.pdf'
+  a.download = wiz.userName ? `${wiz.userName} - קורות חיים.pdf` : 'קורות חיים.pdf'
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 })

@@ -64,9 +64,18 @@ export async function POST(req: NextRequest) {
   }
 
   let resumeText = resumeTextInput?.trim() ?? ''
+  let userName = ''
+
+  const admin = createAdminClient()
+
+  // Get user display name for filename
+  const { data: { user: authUser } } = await admin.auth.admin.getUserById(user.id)
+  userName = authUser?.user_metadata?.full_name
+    || authUser?.user_metadata?.name
+    || authUser?.email?.split('@')[0]
+    || ''
 
   if (!resumeText) {
-    const admin = createAdminClient()
     const { data: resumes } = await admin
       .from('resumes')
       .select('parsed_text')
@@ -92,6 +101,11 @@ export async function POST(req: NextRequest) {
       {
         role: 'user',
         content: `Tailor this resume for the job below. Keep all true facts — only reorder, emphasize, and rephrase to match requirements. Do not invent experience.
+
+CRITICAL RULES:
+- NEVER write placeholder text such as [Phone], [Email], [Address], [City], [LinkedIn], [Date], [Company Name], etc.
+- If a piece of information is not present in the original resume, omit that field or section entirely — do not leave a placeholder.
+- Only include information that actually exists in the original resume.
 
 JOB TITLE: ${jobTitle ?? 'N/A'}
 COMPANY: ${company ?? 'N/A'}
@@ -121,7 +135,7 @@ Output the full tailored resume in ${langLabel}, ready to paste into a document.
   // Try Google Docs (optional — requires drive.file scope)
   const accessToken = await getValidAccessToken(user.id)
   if (!accessToken) {
-    return NextResponse.json({ tailoredText, pdfBase64 })
+    return NextResponse.json({ tailoredText, pdfBase64, userName })
   }
 
   const docTitle = `קו"ח מותאם — ${jobTitle ?? 'משרה'}${company ? ` | ${company}` : ''}`
@@ -132,7 +146,7 @@ Output the full tailored resume in ${langLabel}, ready to paste into a document.
     body: JSON.stringify({ title: docTitle }),
   })
 
-  if (!createRes.ok) return NextResponse.json({ tailoredText, pdfBase64 })
+  if (!createRes.ok) return NextResponse.json({ tailoredText, pdfBase64, userName })
 
   const doc = await createRes.json() as { documentId: string }
 
@@ -145,5 +159,5 @@ Output the full tailored resume in ${langLabel}, ready to paste into a document.
   })
 
   const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`
-  return NextResponse.json({ tailoredText, pdfBase64, docUrl })
+  return NextResponse.json({ tailoredText, pdfBase64, docUrl, userName })
 }

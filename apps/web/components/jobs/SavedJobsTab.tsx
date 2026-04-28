@@ -220,6 +220,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   const [tailorDocUrl, setTailorDocUrl] = useState<string | null>(null)
   const [tailorError, setTailorError] = useState<string | null>(null)
   const [tailorNeedResume, setTailorNeedResume] = useState(false)
+  const [tailorUserName, setTailorUserName] = useState<string | null>(null)
   const [interviewOpen, setInterviewOpen] = useState(false)
   const [interviewLoading, setInterviewLoading] = useState(false)
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
@@ -265,7 +266,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   })()
   const contactEmail = extractedEmail
 
-  const doSend = async (gender: Gender, language: 'he' | 'en', tailoredPdfB64?: string | null, tailoredTextArg?: string | null) => {
+  const doSend = async (gender: Gender, language: 'he' | 'en', tailoredPdfB64?: string | null, tailoredTextArg?: string | null, userNameArg?: string | null) => {
     setSending(true)
     setSendError(null)
     try {
@@ -280,6 +281,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
       }
       if (tailoredPdfB64) body.tailoredPdfB64 = tailoredPdfB64
       else if (tailoredTextArg) body.tailoredText = tailoredTextArg
+      if (userNameArg) body.userName = userNameArg
       const res = await fetch('/api/jobs/send-cv-gmail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -325,7 +327,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
     }
   }
 
-  const startSendFlow = async (gender: Gender, language: 'he' | 'en' = 'he', tailoredPdfB64?: string | null, tailoredTextArg?: string | null) => {
+  const startSendFlow = async (gender: Gender, language: 'he' | 'en' = 'he', tailoredPdfB64?: string | null, tailoredTextArg?: string | null, userNameArg?: string | null) => {
     if (!contactEmail) return
     setSendError(null)
 
@@ -381,7 +383,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
       })
     }
 
-    await doSend(gender, language, tailoredPdfB64, tailoredTextArg)
+    await doSend(gender, language, tailoredPdfB64, tailoredTextArg, userNameArg)
   }
 
   const openCvDialog = () => {
@@ -426,7 +428,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
           language: sendLang,
         }),
       })
-      const data = await res.json() as { tailoredText?: string; pdfBase64?: string; docUrl?: string; error?: string }
+      const data = await res.json() as { tailoredText?: string; pdfBase64?: string; docUrl?: string; userName?: string; error?: string }
       if (!res.ok || !data.tailoredText) {
         const errMsg = data.error === 'noResume'
           ? 'לא נמצאו קורות חיים שמורים. עלייך להעלות קורות חיים תחילה.'
@@ -438,6 +440,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
       setTailoredText(data.tailoredText)
       setTailoredPdf(data.pdfBase64 ?? null)
       setTailorDocUrl(data.docUrl ?? null)
+      setTailorUserName(data.userName ?? null)
     } catch {
       setTailorError('שגיאת רשת — נסה שוב')
     } finally {
@@ -452,7 +455,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = sendLang === 'en' ? 'tailored-cv.pdf' : 'קורות-חיים-מותאמים.pdf'
+    a.download = tailorUserName ? `${tailorUserName} - קורות חיים.pdf` : 'קורות חיים.pdf'
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 5000)
   }
@@ -465,6 +468,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
       gender, sendLang,
       cvType === 'tailored' ? tailoredPdf : null,
       cvType === 'tailored' ? tailoredText : null,
+      cvType === 'tailored' ? tailorUserName : null,
     )
   }
 
