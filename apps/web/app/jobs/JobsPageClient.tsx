@@ -7,9 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Sparkles, FileText, MessageCircle, Bookmark } from 'lucide-react'
+import { Loader2, Search, ExternalLink, MapPin, DollarSign, Wifi, Sparkles, FileText, MessageCircle, Bookmark, Send } from 'lucide-react'
 import { CommunityJobs } from '@/components/jobs/CommunityJobs'
 import { SavedJobsTab } from '@/components/jobs/SavedJobsTab'
+import { BulkSendDialog } from '@/components/jobs/BulkSendDialog'
 
 function LinkedInIcon({ className }: { className?: string }) {
   return (
@@ -279,10 +280,14 @@ export function JobsPageClient({ savedJobs, resumeId, linkedinProfile }: { saved
     }
   }
 
+  const [bulkOpen, setBulkOpen] = useState(false)
+
   return (
     <div className="space-y-6">
+      <BulkSendDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />
       <Tabs defaultValue="saved" className="flex-col">
-        <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-10 gap-0">
+        <div className="flex items-center justify-between border-b">
+        <TabsList className="justify-start rounded-none border-b-0 bg-transparent p-0 h-10 gap-0">
           <TabsTrigger
             value="saved"
             className="flex items-center gap-1.5 px-3 sm:px-5 h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none text-sm"
@@ -302,6 +307,10 @@ export function JobsPageClient({ savedJobs, resumeId, linkedinProfile }: { saved
             <Search className="h-3.5 w-3.5" /> חיפוש AI
           </TabsTrigger>
         </TabsList>
+          <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)} className="mb-1 text-indigo-700 border-indigo-300 hover:bg-indigo-50 shrink-0">
+            <Send className="h-3.5 w-3.5 mr-1.5" /> שליחה מרובה
+          </Button>
+        </div>
 
         {/* ── My Jobs ── */}
         <TabsContent value="saved" className="mt-4">
