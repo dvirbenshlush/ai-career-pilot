@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const VALID_STATUSES = ['applied', 'interviewing', 'offer', 'rejected']
+const VALID_STATUSES = ['applied', 'interviewing', 'interview_scheduled', 'offer', 'rejected']
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()

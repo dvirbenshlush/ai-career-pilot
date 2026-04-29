@@ -12,16 +12,17 @@ import {
 import {
   Loader2, ExternalLink, MapPin, DollarSign, Wifi, Sparkles,
   Trash2, Search, RefreshCw, Building2, ChevronDown, ChevronUp,
-  Briefcase, Mail, Phone, Send, User, GraduationCap, CheckCircle2, Circle, Download,
+  Briefcase, Mail, Phone, Send, User, GraduationCap, CheckCircle2, Circle, Download, CalendarDays,
 } from 'lucide-react'
 
-type AppStatus = 'applied' | 'interviewing' | 'offer' | 'rejected'
+type AppStatus = 'applied' | 'interviewing' | 'interview_scheduled' | 'offer' | 'rejected'
 
 const STATUS_CONFIG: Record<AppStatus, { label: string; color: string; dot: string }> = {
-  applied:      { label: 'Applied',      color: 'bg-blue-100 text-blue-700 border-blue-200',   dot: 'bg-blue-500' },
-  interviewing: { label: 'Interviewing', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
-  offer:        { label: 'Offer',        color: 'bg-green-100 text-green-700 border-green-200', dot: 'bg-green-500' },
-  rejected:     { label: 'Rejected',     color: 'bg-red-100 text-red-700 border-red-200',      dot: 'bg-red-500' },
+  applied:              { label: 'Applied',        color: 'bg-blue-100 text-blue-700 border-blue-200',       dot: 'bg-blue-500' },
+  interviewing:         { label: 'Interviewing',   color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
+  interview_scheduled:  { label: 'ראיון נקבע',     color: 'bg-purple-100 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
+  offer:                { label: 'Offer',           color: 'bg-green-100 text-green-700 border-green-200',    dot: 'bg-green-500' },
+  rejected:             { label: 'Rejected',        color: 'bg-red-100 text-red-700 border-red-200',          dot: 'bg-red-500' },
 }
 
 interface InterviewQuestion { category: 'טכני' | 'התנהגותי' | 'חברה'; question: string }
@@ -227,6 +228,13 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   const [interviewError, setInterviewError] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [feedback, setFeedback] = useState<Record<number, AnswerFeedback & { loading?: boolean }>>({})
+  // Optional schedule dialog (shown when status → interview_scheduled)
+  const [scheduleOpen,   setScheduleOpen]   = useState(false)
+  const [scheduleDate,   setScheduleDate]   = useState('')
+  const [scheduleTime,   setScheduleTime]   = useState('')
+  const [scheduleNotes,  setScheduleNotes]  = useState('')
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleError,  setScheduleError]  = useState<string | null>(null)
 
   const setAnswer = (idx: number, val: string) => setAnswers(p => ({ ...p, [idx]: val }))
 
@@ -386,6 +394,33 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
     await doSend(gender, language, tailoredPdfB64, tailoredTextArg, userNameArg)
   }
 
+  const handleScheduleSave = async () => {
+    if (!scheduleDate) return
+    setScheduleSaving(true)
+    setScheduleError(null)
+    try {
+      const res = await fetch('/api/interviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_opportunity_id: job.id,
+          title:          job.title,
+          company:        job.company,
+          interview_date: scheduleDate,
+          interview_time: scheduleTime || null,
+          notes:          scheduleNotes || null,
+        }),
+      })
+      const data = await res.json() as { interview?: unknown; error?: string }
+      if (!res.ok) { setScheduleError(data.error ?? 'שגיאה'); return }
+      setScheduleOpen(false)
+    } catch {
+      setScheduleError('שגיאת רשת — נסה שוב')
+    } finally {
+      setScheduleSaving(false)
+    }
+  }
+
   const openCvDialog = () => {
     setSendLang('he')
     setCvType('original')
@@ -539,7 +574,16 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
                 jobId={job.id}
                 applicationId={job.application_id}
                 currentStatus={job.application_status}
-                onChange={(status, appId) => onStatusChange(job.id, status, appId)}
+                onChange={(status, appId) => {
+                  onStatusChange(job.id, status, appId)
+                  if (status === 'interview_scheduled') {
+                    setScheduleDate('')
+                    setScheduleTime('')
+                    setScheduleNotes('')
+                    setScheduleError(null)
+                    setScheduleOpen(true)
+                  }
+                }}
               />
             </div>
 
@@ -678,6 +722,66 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
         <div className="flex gap-3 pt-1">
           <Button className="flex-1" onClick={() => pickGender('male')}>👨 זכר</Button>
           <Button className="flex-1" variant="outline" onClick={() => pickGender('female')}>👩 נקבה</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Optional: add interview to calendar after status → interview_scheduled */}
+    <Dialog open={scheduleOpen} onOpenChange={o => { if (!scheduleSaving) setScheduleOpen(o) }}>
+      <DialogContent showCloseButton>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-indigo-600" /> הוסף ראיון ללוח השנה
+          </DialogTitle>
+          <DialogDescription>ניתן לסגור ולהוסיף מאוחר יותר מטאב לוח השנה</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 pt-1">
+          <div className="bg-muted/40 rounded-md px-3 py-2 text-sm font-medium">
+            {job.title}{job.company ? ` — ${job.company}` : ''}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">תאריך *</label>
+              <input
+                type="date"
+                value={scheduleDate}
+                onChange={e => setScheduleDate(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">שעה</label>
+              <input
+                type="time"
+                value={scheduleTime}
+                onChange={e => setScheduleTime(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">הערות</label>
+            <Textarea
+              value={scheduleNotes}
+              onChange={e => setScheduleNotes(e.target.value)}
+              placeholder="מיקום, פרטים נוספים..."
+              className="min-h-[60px] resize-none text-sm"
+            />
+          </div>
+          {scheduleError && <p className="text-sm text-destructive">{scheduleError}</p>}
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              disabled={scheduleSaving || !scheduleDate}
+              onClick={handleScheduleSave}
+            >
+              {scheduleSaving
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> שומר...</>
+                : <><CalendarDays className="h-4 w-4 mr-2" /> הוסף ללוח השנה</>
+              }
+            </Button>
+            <Button variant="outline" onClick={() => setScheduleOpen(false)}>סגור</Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -903,12 +1007,13 @@ const SOURCES = [
 ]
 
 const STATUS_FILTER_OPTIONS = [
-  { value: 'all',          label: 'כל הסטטוסים' },
-  { value: 'none',         label: 'ללא סטטוס' },
-  { value: 'applied',      label: 'Applied' },
-  { value: 'interviewing', label: 'Interviewing' },
-  { value: 'offer',        label: 'Offer' },
-  { value: 'rejected',     label: 'Rejected' },
+  { value: 'all',                  label: 'כל הסטטוסים' },
+  { value: 'none',                 label: 'ללא סטטוס' },
+  { value: 'applied',              label: 'Applied' },
+  { value: 'interviewing',         label: 'Interviewing' },
+  { value: 'interview_scheduled',  label: 'ראיון נקבע' },
+  { value: 'offer',                label: 'Offer' },
+  { value: 'rejected',             label: 'Rejected' },
 ]
 
 type SortField = 'score' | 'date' | 'title' | 'source'

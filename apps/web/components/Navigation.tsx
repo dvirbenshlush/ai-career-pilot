@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { FileText, MessageSquare, Search, Calendar, Rocket, Menu, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { FileText, MessageSquare, Search, Calendar, Rocket, Menu, X, LogOut } from 'lucide-react'
 import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 const NAV_LINKS = [
   { href: '/resume',    icon: FileText,      label: 'Resume' },
@@ -13,6 +15,13 @@ const NAV_LINKS = [
 
 export function Navigation() {
   const [open, setOpen] = useState(false)
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   return (
     <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
@@ -34,6 +43,14 @@ export function Navigation() {
               {label}
             </Link>
           ))}
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
+            title="התנתק"
+          >
+            <LogOut className="h-4 w-4" />
+            יציאה
+          </button>
         </div>
 
         {/* Mobile hamburger */}
@@ -60,6 +77,13 @@ export function Navigation() {
               {label}
             </Link>
           ))}
+          <button
+            onClick={() => { setOpen(false); handleLogout() }}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-md text-sm text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            יציאה
+          </button>
         </div>
       )}
     </nav>
