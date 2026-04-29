@@ -189,27 +189,36 @@ export async function POST(req: NextRequest) {
     messages: [
       {
         role: 'system',
-        content: `You are a professional career coach. Write concise, human cover letter emails in ${isHe ? 'Hebrew' : 'English'}. Maximum 150 words. No fluff. No placeholders. ${genderNote}`,
+        content: `You are a professional career coach. Write a genuine, human cover letter email in ${isHe ? 'Hebrew' : 'English'}. ${genderNote}
+
+CRITICAL RULES:
+- Stay 100% faithful to the candidate's ACTUAL experience — never invent or exaggerate.
+- If there is a gap between the candidate's background and the job requirements, acknowledge the difference honestly, highlight any transferable skills or adjacent experience that could be an advantage, and express strong genuine motivation to grow into the role.
+- Keep the tone warm and professional — not robotic or template-like.
+- No placeholders. Complete every sentence fully before finishing.`,
       },
       {
         role: 'user',
         content: isHe
-          ? `Write a short cover letter email body for this job application.
+          ? `כתוב גוף מייל לבקשת מועמדות עבור המשרה הבאה.
 
-JOB: ${jobTitle}${company ? ` at ${company}` : ''}
-${snippet ? `DESCRIPTION: ${snippet}` : ''}
-${experienceRequired ? `REQUIREMENTS: ${experienceRequired}` : ''}
+משרה: ${jobTitle}${company ? ` ב-${company}` : ''}
+${snippet ? `תיאור המשרה: ${snippet}` : ''}
+${experienceRequired ? `דרישות: ${experienceRequired}` : ''}
 
-CANDIDATE PROFILE:
+פרופיל המועמד:
 ${profileSnippet}
 
-Rules:
-- Write in Hebrew
-- First line: "שלום רב,"
-- 2-3 short paragraphs: brief intro, why this role, closing
-- Last line: "קורות חיים מצורפים למייל זה."
-- Sign off with "בברכה,"`
-          : `Write a short cover letter email body for this job application.
+כללים:
+- כתוב בעברית
+- שורה ראשונה: "שלום רב,"
+- 3 פסקאות קצרות:
+  1. היכרות קצרה עם הניסיון הרלוונטי הקיים
+  2. אם יש פער בדרישות — הצג את הניסיון הקיים כיתרון פוטנציאלי, הדגש מוטיבציה גבוהה וחזקה להצטרף לתפקיד ולצמוח בו
+  3. סגירה מנומסת
+- שורה אחרונה: "קורות חיים מצורפים למייל זה."
+- חתימה: "בברכה,"`
+          : `Write a cover letter email body for the following job application.
 
 JOB: ${jobTitle}${company ? ` at ${company}` : ''}
 ${snippet ? `DESCRIPTION: ${snippet}` : ''}
@@ -221,12 +230,15 @@ ${profileSnippet}
 Rules:
 - Write in English
 - First line: "Dear Hiring Manager,"
-- 2-3 short paragraphs: brief intro, why this role, closing
+- 3 short paragraphs:
+  1. Brief intro with relevant existing experience
+  2. If there is a gap — frame existing experience as a potential advantage, express strong motivation to join and grow in this role
+  3. Polite closing
 - Last line: "My resume is attached."
 - Sign off with "Best regards,"`,
       },
     ],
-    max_tokens: 400,
+    max_tokens: 600,
   })
 
   const emailBody = coverLetterResult.choices[0]?.message?.content?.trim()
