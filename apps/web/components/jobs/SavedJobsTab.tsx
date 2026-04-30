@@ -90,6 +90,29 @@ const SOURCE_CONFIG: Record<string, { label: string; className: string; Icon: Re
   search: { label: 'חיפוש', className: 'text-purple-700 bg-purple-50 border-purple-200', Icon: null },
 }
 
+function isGarbled(text: string): boolean {
+  if (!text) return true
+  const decoded = (() => { try { return decodeURIComponent(text) } catch { return text } })()
+  const hebrewOrLatin = (decoded.match(/[֐-׿A-za-z]/g) ?? []).length
+  return hebrewOrLatin < decoded.replace(/\s/g, '').length * 0.3
+}
+
+function resolveTitle(job: SavedJob): string {
+  let title = job.title ?? ''
+
+  // Try to decode URL-encoded title
+  try { title = decodeURIComponent(title) } catch { /* use as-is */ }
+
+  if (!isGarbled(title)) return title
+
+  // Fallback: extract first meaningful line from raw_message
+  const raw = job.raw_message || job.snippet || ''
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 2 && l.length < 120)
+  if (lines.length) return lines[0]
+
+  return title
+}
+
 function SourceBadge({ source, sourceName }: { source: string; sourceName?: string | null }) {
   const cfg = SOURCE_CONFIG[source] ?? { label: source, className: 'text-gray-600 bg-gray-50 border-gray-200', Icon: null }
   const label = sourceName ? `${cfg.label} · ${sourceName}` : cfg.label
@@ -207,7 +230,11 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   onStatusChange: (jobId: string, status: AppStatus, appId: string) => void
 }) {
   const [deleting, setDeleting] = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const displayTitle = resolveTitle(job)
+  const fullText = job.raw_message || job.snippet || ''
+  const hasFullText = fullText.length > 150
+  // Show original message expanded by default when snippet is missing or very short
+  const [expanded, setExpanded] = useState(hasFullText && (!job.snippet || job.snippet.length < 60))
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [genderPicker, setGenderPicker] = useState(false)
@@ -550,8 +577,6 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
   }
 
   const date = new Date(job.found_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
-  const fullText = job.raw_message || job.snippet || ''
-  const hasFullText = fullText.length > 150
 
   return (
     <>
@@ -562,7 +587,7 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
 
             {/* Title row */}
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h3 className="font-semibold text-sm">{job.title}</h3>
+              <h3 className="font-semibold text-sm">{displayTitle}</h3>
               <ScoreBadge score={Math.round(job.match_score)} />
               <SourceBadge source={job.source} sourceName={job.source_name} />
               {job.remote && (
@@ -606,8 +631,8 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
               </p>
             )}
 
-            {/* AI summary */}
-            {job.snippet && (
+            {/* AI summary — only show if it's meaningfully different from raw_message */}
+            {job.snippet && job.snippet.length >= 60 && (
               <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{job.snippet}</p>
             )}
 
@@ -647,12 +672,12 @@ function SavedJobCard({ job, onDelete, onStatusChange }: {
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {expanded
-                    ? <><ChevronUp className="h-3 w-3" /> הסתר הודעה מקורית</>
-                    : <><ChevronDown className="h-3 w-3" /> הצג הודעה מקורית</>
+                    ? <><ChevronUp className="h-3 w-3" /> הסתר מודעה מקורית</>
+                    : <><ChevronDown className="h-3 w-3" /> הצג מודעה מקורית</>
                   }
                 </button>
                 {expanded && (
-                  <p className="mt-1.5 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed bg-muted/40 rounded p-2 max-h-96 overflow-y-auto">
+                  <p className="mt-1.5 text-xs text-foreground/80 whitespace-pre-wrap leading-relaxed bg-muted/40 rounded p-2 max-h-96 overflow-y-auto" dir="auto">
                     {fullText}
                   </p>
                 )}
