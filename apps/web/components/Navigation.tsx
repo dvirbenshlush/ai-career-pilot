@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FileText, MessageSquare, Search, Calendar, Rocket, Menu, X, LogOut } from 'lucide-react'
+import { FileText, MessageSquare, Search, Calendar, Rocket, Menu, X, LogOut, User } from 'lucide-react'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: '/interview', icon: MessageSquare, label: 'Interview' },
   { href: '/jobs',      icon: Search,        label: 'Jobs' },
   { href: '/calendar',  icon: Calendar,      label: 'Calendar' },
+  { href: '/profile',   icon: User,          label: 'Profile' },
 ]
 
 export function Navigation() {
