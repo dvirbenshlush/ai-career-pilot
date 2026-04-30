@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
-import { FileText, MessageSquare, Search, Calendar, ArrowRight } from 'lucide-react'
+import { FileText, MessageSquare, Search, Calendar, User, ArrowRight } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -52,6 +52,15 @@ export default async function DashboardPage() {
       badge: 'Gmail Sync',
       color: 'text-orange-600',
       bg: 'bg-orange-50',
+    },
+    {
+      href: '/profile',
+      icon: User,
+      title: 'פרופיל אישי',
+      description: 'בנק מידע אישי שה-AI משתמש בו למילוי טפסים, קורות חיים ומכתבי גישה',
+      badge: 'AI Context',
+      color: 'text-indigo-600',
+      bg: 'bg-indigo-50',
     },
   ]
 

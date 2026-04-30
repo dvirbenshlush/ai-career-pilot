@@ -42,6 +42,9 @@
         <button id="btn-interview" class="btn btn-secondary">🎓 הכן לראיון</button>
       </div>
       <div class="actions">
+        <button id="btn-fill-form" class="btn btn-fill">🤖 מלא טופס מועמדות</button>
+      </div>
+      <div class="actions">
         <button id="btn-save-applied" class="btn btn-save" disabled>📌 שמור כהגשה</button>
       </div>
 
@@ -96,6 +99,34 @@
         <textarea id="resume-text-input" rows="8" placeholder="הדבק כאן את תוכן הקו&quot;ח שלך..."></textarea>
       </div>
       <button id="btn-tailor-with-text" class="btn btn-tailor">✨ התאם קו"ח למשרה</button>
+    </div>
+
+    <!-- Screen: fill form -->
+    <div id="screen-fill-form" class="screen" style="display:none">
+      <button id="btn-back-fill-form" class="btn btn-secondary btn-sm">← חזור</button>
+
+      <div id="fill-form-auto" class="section">
+        <label>זיהוי שאלות אוטומטי</label>
+        <button id="btn-detect-questions" class="btn btn-secondary">🔍 זהה שאלות מהדף</button>
+        <div id="detected-questions-preview" style="display:none">
+          <div id="detected-questions-list" class="detected-list"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>או הדבק שאלות ידנית</label>
+        <textarea id="manual-questions" rows="5" placeholder="הדבק שאלות מהטופס, כל שאלה בשורה נפרדת..."></textarea>
+      </div>
+
+      <div id="fill-form-status" class="status" style="display:none"></div>
+
+      <button id="btn-answer-form" class="btn btn-fill">✨ ענה על השאלות</button>
+
+      <div id="form-answers" style="display:none">
+        <div class="section-divider"></div>
+        <label>תשובות מוצעות</label>
+        <div id="answers-list" class="answers-list"></div>
+      </div>
     </div>
 
     <!-- Screen: interview questions -->

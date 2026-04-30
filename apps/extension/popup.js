@@ -389,6 +389,110 @@ $('btn-save-applied').addEventListener('click', async () => {
   }
 })
 
+// ── Fill Form ─────────────────────────────────────────────────────────────────
+
+$('btn-fill-form').addEventListener('click', () => {
+  $('detected-questions-preview').style.display = 'none'
+  $('detected-questions-list').innerHTML = ''
+  $('manual-questions').value = ''
+  $('form-answers').style.display = 'none'
+  $('answers-list').innerHTML = ''
+  setFillFormStatus('', '')
+  showScreen('screen-fill-form')
+})
+
+$('btn-back-fill-form').addEventListener('click', () => showScreen('screen-main'))
+
+function setFillFormStatus(msg, type = 'loading') {
+  const el = $('fill-form-status')
+  el.textContent = msg
+  el.className = `status ${type}`
+  el.style.display = msg ? 'block' : 'none'
+}
+
+$('btn-detect-questions').addEventListener('click', async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (!tab?.id || !tab.url?.startsWith('http')) {
+      setFillFormStatus('לא ניתן לגשת לדף זה', 'error')
+      return
+    }
+
+    $('btn-detect-questions').disabled = true
+    $('btn-detect-questions').textContent = '⏳ מזהה...'
+
+    chrome.tabs.sendMessage(tab.id, { type: 'GET_FORM_QUESTIONS' }, response => {
+      $('btn-detect-questions').disabled = false
+      $('btn-detect-questions').textContent = '🔍 זהה שאלות מהדף'
+
+      if (chrome.runtime.lastError || !response?.questions?.length) {
+        setFillFormStatus('לא זוהו שאלות אוטומטית — הדבק ידנית', 'error')
+        return
+      }
+
+      const qs = response.questions
+      $('detected-questions-list').innerHTML = qs.map(q =>
+        `<div class="detected-q">• ${q}</div>`
+      ).join('')
+      $('detected-questions-preview').style.display = 'block'
+      $('manual-questions').value = qs.join('\n')
+      setFillFormStatus(`זוהו ${qs.length} שאלות`, 'success')
+    })
+  } catch {
+    $('btn-detect-questions').disabled = false
+    $('btn-detect-questions').textContent = '🔍 זהה שאלות מהדף'
+    setFillFormStatus('שגיאה בזיהוי שאלות', 'error')
+  }
+})
+
+$('btn-answer-form').addEventListener('click', async () => {
+  const raw = $('manual-questions').value.trim()
+  if (!raw) { setFillFormStatus('יש להכניס שאלות תחילה', 'error'); return }
+
+  const questions = raw.split('\n').map(q => q.trim()).filter(Boolean)
+  if (!questions.length) { setFillFormStatus('לא נמצאו שאלות', 'error'); return }
+
+  setFillFormStatus('מנתח ומייצר תשובות...', 'loading')
+  $('btn-answer-form').disabled = true
+  $('form-answers').style.display = 'none'
+
+  const jobText = $('job-text')?.value?.trim() ?? ''
+  const lines = jobText.split('\n').filter(l => l.trim())
+  const jobTitle = lines[0]?.slice(0, 80) ?? ''
+
+  const res = await apiCall('/api/extension/answer-form', { questions, jobTitle })
+
+  $('btn-answer-form').disabled = false
+
+  if (!res?.ok || !res.data?.answers) {
+    setFillFormStatus(res?.data?.error ?? 'שגיאה בייצור תשובות', 'error')
+    return
+  }
+
+  const answers = res.data.answers
+  $('answers-list').innerHTML = answers.map((a, i) => `
+    <div class="answer-card">
+      <div class="answer-question">${a.question}</div>
+      <div class="answer-text" id="ans-text-${i}">${a.answer}</div>
+      <button class="answer-copy" onclick="copyAnswer(${i})">📋 העתק</button>
+    </div>
+  `).join('')
+
+  $('form-answers').style.display = 'block'
+  setFillFormStatus('✅ התשובות מוכנות', 'success')
+})
+
+window.copyAnswer = (i) => {
+  const el = document.getElementById(`ans-text-${i}`)
+  if (!el) return
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    const btn = el.nextElementSibling
+    const orig = btn.textContent
+    btn.textContent = '✅ הועתק!'
+    setTimeout(() => { btn.textContent = orig }, 1500)
+  })
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 init()
