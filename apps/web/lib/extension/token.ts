@@ -4,7 +4,7 @@ const SECRET = new TextEncoder().encode(
   process.env.EXTENSION_TOKEN_SECRET ?? process.env.NEXTAUTH_SECRET ?? 'fallback-dev-secret'
 )
 
-const EXPIRY = '24h'
+const EXPIRY = '30d'
 
 export async function signExtensionToken(userId: string, email: string): Promise<string> {
   return new SignJWT({ sub: userId, email })

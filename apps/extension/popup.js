@@ -92,7 +92,17 @@ async function getToken() {
 
 async function apiCall(path, body, method = 'POST') {
   return new Promise(resolve => {
-    chrome.runtime.sendMessage({ type: 'API_CALL', path, body, method }, resolve)
+    chrome.runtime.sendMessage({ type: 'API_CALL', path, body, method }, async result => {
+      if (result?.status === 401) {
+        // Token expired or invalid — clear it and force reconnect
+        await new Promise(res => chrome.runtime.sendMessage({ type: 'CLEAR_TOKEN' }, res))
+        setStatus('פג תוקף החיבור — יש להתחבר מחדש', 'error')
+        setTimeout(() => init(), 1500)
+        resolve(result)
+        return
+      }
+      resolve(result)
+    })
   })
 }
 
